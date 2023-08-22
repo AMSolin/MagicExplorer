@@ -1,8 +1,5 @@
 import streamlit as st
-# from streamlit_searchbox import st_searchbox
-# from st_click_detector import click_detector
-# import pandas as pd
-import page_import, page_card_base, page_players, page_initialization
+import page_import, page_collections, page_players, page_initialization
 from utils import *
 
 st.set_page_config(

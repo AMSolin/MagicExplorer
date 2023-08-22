@@ -146,7 +146,7 @@ def reset_table_deck_content():
 
 def reset_table_card_names():
     csr = Db('app_data.db')
-    csr.execute("attach database './data/AllPrintings.sqlite' as ap")
+    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
     csr.executescript(
     """
         drop table if exists card_names;
@@ -166,7 +166,7 @@ def reset_table_card_names():
 
 def reset_table_sets():
     csr = Db('app_data.db')
-    csr.execute("attach database './data/AllPrintings.sqlite' as ap")
+    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
     csr.executescript(
     """
         drop table if exists main.sets;
@@ -217,7 +217,7 @@ def reset_table_cards():
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-    csr.execute("attach database './data/AllPrintings.sqlite' as ap")
+    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
     rows = csr.execute(
     """
         select
@@ -325,7 +325,7 @@ def reset_table_foreign_data():
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-    csr.execute("attach database './data/AllPrintings.sqlite' as ap")
+    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
     rows = csr.execute(
     """
         select

@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import get_lists, get_decks, import_cards
+from utils import display_toasts, get_lists, get_decks, import_cards
 
 def init_session_variables():
     if 'selection_table' not in st.session_state:
@@ -19,11 +19,7 @@ def init_session_variables():
         st.session_state.counter = 0
     if 'selected_prev_card' not in st.session_state:
         st.session_state.selected_prev_card = ''
-    if 'last_actions' not in st.session_state:
-        st.session_state.last_actions = []
-    else:
-        while st.session_state.last_actions:
-            st.toast(st.session_state.last_actions.pop(0))
+    display_toasts()
 
 def export_section():
     list_action = st.radio(

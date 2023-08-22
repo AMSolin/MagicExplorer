@@ -33,6 +33,13 @@ class Db:
     def __del__(self):
         self.close_connect()
 
+def display_toasts():
+    if 'last_actions' not in st.session_state:
+            st.session_state.last_actions = []
+    else:
+        while st.session_state.last_actions:
+            st.toast(st.session_state.last_actions.pop(0))
+
 @st.cache_data
 def search_cards(
     name='', cmc=(0, 15), type='', color=''
@@ -216,6 +223,9 @@ def add_new_player(name: str, is_default: bool=False):
     """)
     if is_default:
         set_default_player(name, csr)
+    st.session_state.last_actions.append(
+            f'Player {name} was added!'
+        )
 
 def delete_player(name: str):
     csr = Db('user_data.db')
@@ -232,6 +242,9 @@ def delete_player(name: str):
     """).fetchone()
     if is_default == 0:
         set_default_player(default_player, csr)
+    st.session_state.last_actions.append(
+            f'Player {name} was deleted!'
+        )
 
 def update_player(player, player_id, column, value):
     csr = Db('user_data.db')
@@ -306,12 +319,18 @@ def import_cards(
             insert into lists (name, creation_date)
             values ('{list_name}', strftime('%s','now'))
         """)
+        st.session_state.last_actions.append(
+            f'List {list_name} was added!'
+        )
     if deck_action == 'New':
         csr.execute(
         f"""
             insert into decks (name, creation_date)
             values ('{deck_name}', strftime('%s','now'))
         """)
+        st.session_state.last_actions.append(
+            f'Deck {deck_name} was added!'
+        )
     if list_action != 'Skip':
         csr.execute(
         f"""

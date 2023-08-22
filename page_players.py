@@ -3,8 +3,10 @@ import pandas as pd
 from utils import *
 
 def get_content():
+    display_toasts()
     with st.sidebar:
         players_table = get_players()
+        table_container = st.container()
         def callback():
             changes = [
                 (ix, [(col, val) for col, val in pair.items()])
@@ -17,9 +19,8 @@ def get_content():
                 try:
                     update_player(player, player_id, col, val)
                 except sqlite3.IntegrityError:
-                     st.session_state.callback_err = val
-
-        _ = st.data_editor(
+                     table_container.error(f'Player {val} already exist!')
+        _ = table_container.data_editor(
             players_table, 
             key='players_table',
             hide_index=True,
@@ -31,13 +32,6 @@ def get_content():
             column_order=['name', 'is_default_player'],
             on_change=callback
         )
-        
-        if st.session_state.get('callback_err'):
-            player = st.session_state.pop('callback_err')
-            st.sidebar.error(f'Player {player} already exist!')
-
-        if 'changes_players_table' not in st.session_state:
-            st.session_state.changes_players_table = False
         
         action = st.radio(
             label='Add / delete player',
@@ -78,11 +72,4 @@ def get_content():
                         action, deleted_player
                     )
                     st.experimental_rerun()
-        
-        if st.session_state.changes_players_table:
-            last_action, last_name = st.session_state.changes_players_table
-            msg = ' added!' if last_action == 'Add' else ' deleted!'
-            st.info(f'Player {last_name} was {msg}', icon='ℹ️')
-        st.session_state.changes_players_table = False
-    
     st.write('here will be player info coming soon')
