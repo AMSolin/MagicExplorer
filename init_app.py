@@ -76,9 +76,11 @@ def reset_table_lists():
         create table lists (
             list_id integer primary key,
             name text not null unique,
+            player_id integer,
             creation_date integer not null,
             note text,
-            is_default_list integer default 0
+            is_default_list integer default 0,
+            foreign key (player_id) references players(player_id) on delete set null on update cascade
         );
         insert into lists (name, creation_date, is_default_list)
         values ('Default list', strftime('%s','now'), 1)
@@ -114,8 +116,10 @@ def reset_table_decks():
         create table decks (
             deck_id integer primary key,
             name text not null unique,
+            player_id integer,
             creation_date integer not null,
-            note text
+            note text,
+            foreign key (player_id) references players(player_id) on delete set null on update cascade
         );
         insert into decks (name, creation_date)
         values ('Default deck', strftime('%s','now'))

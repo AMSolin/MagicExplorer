@@ -39,7 +39,7 @@ def export_section():
             if list_action == 'Available':
                 list_name = st.selectbox(
                     label='Select list',
-                    options=get_lists()
+                    options=get_lists()['name']
                 )
             elif list_action == 'New':
                 list_name = st.text_input('Enter new list name')
@@ -48,7 +48,7 @@ def export_section():
             if deck_action == 'Available':
                 deck_name = st.selectbox(
                     label='Select deck',
-                    options=get_decks()
+                    options=get_decks()['name']
                 )
             elif deck_action == 'New':
                 deck_name = st.text_input('Enter new deck name')

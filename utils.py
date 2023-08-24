@@ -193,69 +193,96 @@ def get_players():
 
 def get_lists():
     csr = Db('user_data.db')
-    result = csr.read_sql('select name, is_default_list from lists order by list_id')
-    result['create_ns'] = time.time_ns()
-    return result.sort_values(by='is_default_list', ascending=False)
-
-def get_decks():
-    csr = Db('user_data.db')
-    result = csr.read_sql('select name from decks order by deck_id')
+    result = csr.read_sql('select * from lists order by is_default_list desc, list_id')
     result['create_ns'] = time.time_ns()
     return result
 
-def set_default_player(name: str, cursor=None):
+def get_decks():
+    csr = Db('user_data.db')
+    result = csr.read_sql('select * from decks order by deck_id')
+    result['create_ns'] = time.time_ns()
+    return result
+
+def set_default_value(entity, name: str, cursor=None):
     csr = Db('user_data.db') if cursor is None else cursor
     csr.execute(
     f"""
-        update players
-        set is_default_player = case
+        update {entity}s
+        set is_default_{entity} = case
             when name = '{name}'
                 then 1
             else 0 end
     """)
 
-def add_new_player(name: str, is_default: bool=False):
+def add_new_record(entity: str, name: str, owner: str=None, is_default: bool=False):
     csr = Db('user_data.db')
-    csr.execute(
-    f"""
-        insert into players (name, is_default_player)
-        values ('{name}', {int(is_default)})
-    """)
+    if owner:
+        owner_id = csr.execute(
+            f'select player_id from players where name = "{owner}"'
+        ).fetchone()[0]
+    else:
+        owner_id = 'NULL'
+    
+    if entity == 'player':
+        csr.execute(
+        f"""
+            insert into players (name, is_default_player)
+            values ('{name}', {int(is_default)})
+        """)
+    if entity == 'list':
+        csr.execute(
+        f"""
+            insert into lists (
+                name, player_id, creation_date, is_default_list
+            )
+            values (
+                '{name}', '{owner_id}', strftime('%s','now'), {int(is_default)}
+            )
+        """)
+    if entity == 'deck':
+        csr.execute(
+        f"""
+            insert into decks (name, player_id, creation_date)
+            values ('{name}', '{owner_id}', strftime('%s','now'))
+        """)
+    else:
+        raise ValueError(f'Unknown {entity} entity!')
     if is_default:
-        set_default_player(name, csr)
+        set_default_value(entity, name, csr)
     st.session_state.last_actions.append(
             f'Player {name} was added!'
         )
 
-def delete_player(name: str):
+def delete_record(entity: str, name: str):
     csr = Db('user_data.db')
     csr.execute(
     f"""
-        delete from players 
+        delete from {entity}s 
         where name = '{name}'
     """)
-    default_player, is_default = csr.execute(
-    """
-        select name, is_default_player
-        from players
-        order by is_default_player desc, player_id
-    """).fetchone()
-    if is_default == 0:
-        set_default_player(default_player, csr)
+    if entity in ['list', 'player']:
+        default_value, is_default = csr.execute(
+        f"""
+            select name, is_default_{entity}
+            from {entity}s
+            order by is_default_{entity} desc, {entity}_id
+        """).fetchone()
+        if is_default == 0:
+            set_default_value(entity, default_value, csr)
     st.session_state.last_actions.append(
-            f'Player {name} was deleted!'
+            f'{entity.capitalize()} {name} was deleted!'
         )
 
-def update_player(player, player_id, column, value):
+def update_table(entity, default_value, id, column, value):
     csr = Db('user_data.db')
-    if column == 'is_default_player':
-        set_default_player(player, csr)
+    if column == f'is_default_{entity}':
+        set_default_value(entity, default_value, csr)
     else:
         csr.execute(
         f"""
-            update players
+            update {entity}s
             set {column} = '{value}'
-            where player_id = {player_id}
+            where {entity}_id = {id}
         """)
 
 def columns_conversation(df):

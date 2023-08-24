@@ -17,7 +17,7 @@ def get_content():
                 player = players_table.iloc[ix].loc['name']
                 player_id = players_table.iloc[ix].loc['player_id']
                 try:
-                    update_player(player, player_id, col, val)
+                    update_table('player', player, player_id, col, val)
                 except sqlite3.IntegrityError:
                      table_container.error(f'Player {val} already exist!')
         _ = table_container.data_editor(
@@ -48,7 +48,7 @@ def get_content():
                 default_flag = st.checkbox('Set as default player')
                 if submitted and new_player.strip() != '':
                     try:
-                        add_new_player(new_player, default_flag)
+                        add_new_record('player', new_player, default_flag)
                         st.session_state.changes_players_table = (
                             action, new_player
                         )
@@ -67,7 +67,7 @@ def get_content():
                 col2.write('')
                 submitted = col2.form_submit_button('Drop')
                 if submitted:
-                    delete_player(deleted_player)
+                    delete_record('player', deleted_player)
                     st.session_state.changes_players_table = (
                         action, deleted_player
                     )
