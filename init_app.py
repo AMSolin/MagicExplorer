@@ -99,12 +99,15 @@ def reset_table_list_content():
             list_id integer,
             card_uuid guid,
             condition_id integer,
-            qnty integer,
             foil integer,
             language text,
-            foreign key (list_id) references lists(list_id) on delete cascade on update cascade--,
-            --foreign key (card_uuid) references cards(card_uuid) on delete cascade on update cascade,
-            --foreign key (condition_id) references cards(card_uuid) on delete set null on update cascade
+            qnty integer,
+            foreign key (list_id)
+                references lists (list_id) on update cascade on delete cascade
+        );
+        create unique index idx_list_content
+        on list_content (
+            list_id, card_uuid, condition_id, foil, language
         );
     """)
 
@@ -119,7 +122,8 @@ def reset_table_decks():
             player_id integer,
             creation_date integer not null,
             note text,
-            foreign key (player_id) references players(player_id) on delete set null on update cascade
+            foreign key (player_id) references players(player_id)
+                on update cascade on delete set null
         );
         insert into decks (name, creation_date)
         values ('Default deck', strftime('%s','now'))
@@ -138,13 +142,16 @@ def reset_table_deck_content():
             deck_id integer,
             card_uuid guid,
             condition_id integer,
-            deck_type_id integer,
-            qnty integer,
             foil integer,
             language text,
-            foreign key (deck_id) references decks(deck_id) on delete cascade on update cascade--,
-            --foreign key (card_uuid) references cards(card_uuid) on delete cascade on update cascade,
-            --foreign key (condition_id) references cards(card_uuid) on delete set null on update cascade
+            deck_type_id integer,
+            qnty integer,
+            foreign key (deck_id)
+              references decks(deck_id) on update cascade on delete cascade
+        );
+        create unique index idx_deck_content
+        on deck_content (
+            deck_id, card_uuid, condition_id, foil, language, deck_type_id
         );
     """)
 
@@ -233,6 +240,9 @@ def reset_table_cards():
             c.language,
             c.manacost,
             c.manavalue,
+            c.type,
+            c.types,
+            c.rarity,
             c.colors,
             c.power,
             c.toughness
@@ -252,6 +262,9 @@ def reset_table_cards():
             language text,
             mana_cost text,
             mana_value text,
+            type text,
+            types text,
+            rarity text,
             colors text,
             power text,
             toughness text
@@ -269,12 +282,15 @@ def reset_table_cards():
                 language,
                 mana_cost,
                 mana_value,
+                type,
+                types,
+                rarity,
                 colors,
                 power,
                 toughness
             )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (uuid.UUID(r[0]), r[1], r[2], r[3], uuid.UUID(r[4]), r[5], r[6], r[7], r[8], r[9], r[10])
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uuid.UUID(r[0]), r[1], r[2], r[3], uuid.UUID(r[4]), r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13])
         )
     csr.execute("attach database './data/app_data.db' as ad")
     csr.executescript(
@@ -289,6 +305,9 @@ def reset_table_cards():
             language text,
             mana_cost text,
             mana_value text,
+            type text,
+            types text,
+            rarity text,
             colors text,
             power text,
             toughness text,
@@ -304,6 +323,9 @@ def reset_table_cards():
             language,
             mana_cost,
             mana_value,
+            type,
+            types,
+            rarity,
             colors,
             power,
             toughness
@@ -317,6 +339,9 @@ def reset_table_cards():
             language,
             mana_cost,
             mana_value,
+            type,
+            types,
+            rarity,
             colors,
             power,
             toughness

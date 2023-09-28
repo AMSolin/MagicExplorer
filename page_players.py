@@ -49,9 +49,6 @@ def get_content():
                 if submitted and new_player.strip() != '':
                     try:
                         add_new_record('player', new_player, default_flag)
-                        st.session_state.changes_players_table = (
-                            action, new_player
-                        )
                         st.experimental_rerun()
                     except sqlite3.IntegrityError:
                             st.error(f'Player {new_player} already exist!')
@@ -68,8 +65,5 @@ def get_content():
                 submitted = col2.form_submit_button('Drop')
                 if submitted:
                     delete_record('player', deleted_player)
-                    st.session_state.changes_players_table = (
-                        action, deleted_player
-                    )
                     st.experimental_rerun()
     st.write('here will be player info coming soon')

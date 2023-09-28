@@ -24,12 +24,12 @@ def init_session_variables():
 def export_section():
     list_action = st.radio(
         label='Choose list to add cards',
-        options=('Available', 'New', 'Skip'),
+        options=('Skip', 'Available', 'New'),
         horizontal=True
     )
     deck_action = st.radio(
         label='Choose deck to add cards',
-        options=('Available', 'New', 'Skip'),
+        options=('Skip', 'Available', 'New'),
         horizontal=True
     )
 

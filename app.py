@@ -23,14 +23,14 @@ st.markdown(
 def main():
 
 	st.title('Magic explorer')
-	menu = ['Init', 'Cards', 'Import', 'Players','Lists','Decks']
+	menu = ['Init', 'Cards', 'Import', 'Players', 'Collections', 'Decks']
 	choice = st.sidebar.selectbox('Menu',menu)
 	if choice == 'Init':
 		page_initialization.get_content()
-	if choice == 'Cards':
-		page_card_base.get_content()
 	if choice == 'Players':
 		page_players.get_content()
+	if choice == 'Collections':
+		page_collections.get_content()
 	if choice == 'Import':
 		page_import.get_content()
 main()

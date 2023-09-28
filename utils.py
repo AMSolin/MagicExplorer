@@ -1,10 +1,14 @@
 import sqlite3
+import uuid
 import pandas as pd
 import requests
 import json
 import streamlit as st
 import time
 from typing import List, Tuple
+
+sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
+sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
 
 class Db:
     def __init__(self, db: str, detect_types=0):
@@ -100,6 +104,7 @@ def search_card_by_name(substr_card: str):
 @st.cache_data
 def search_set_by_name(card_name: str, card_lang: str):
     csr = Db('app_data.db')
+    card_name = card_name.replace("'", "''")
     if card_lang in ['English', 'Phyrexian']:
         query = f"""
             select
@@ -193,7 +198,55 @@ def get_players():
 
 def get_lists():
     csr = Db('user_data.db')
-    result = csr.read_sql('select * from lists order by is_default_list desc, list_id')
+    result = csr.read_sql(
+    """
+        select
+            l.list_id,
+            l.name,
+            datetime(l.creation_date, 'unixepoch', 'localtime') as creation_date,
+            l.note,
+            l.is_default_list,
+            p.name as owner
+        from lists as l
+        left join players as p
+            on l.player_id = p.player_id
+        order by is_default_list desc, l.creation_date
+    """)
+    result['create_ns'] = time.time_ns()
+    return result
+
+def get_list_content(list_id):
+    csr = Db('user_data.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            lc.card_uuid,
+            lc.condition_id,
+            lc.language,
+            lc.qnty,
+            ca.name, --#TODO change name according language
+            ca.number as card_number,
+            ca.type,
+            la.language_code,
+            se.set_code,
+            --se.keyrune_code, #TODO add keyrune symbol
+            ca.rarity,
+            ca.mana_cost,
+            lc.foil,
+            co.code as condition_code
+        from list_content as lc
+        left join cards as ca
+            on lc.card_uuid = ca.card_uuid
+        left join card_condition as co
+            on lc.condition_id = co.condition_id
+        left join sets as se
+            on ca.set_code = se.set_code
+        left join languages as la
+            on lc.language = la.language
+        where list_id = {list_id}
+        order by ca.name
+    """)
     result['create_ns'] = time.time_ns()
     return result
 
@@ -214,49 +267,43 @@ def set_default_value(entity, name: str, cursor=None):
             else 0 end
     """)
 
-def add_new_record(entity: str, name: str, owner: str=None, is_default: bool=False):
+def add_new_record(entity: str, name: str, is_default: bool=False):
     csr = Db('user_data.db')
-    if owner:
-        owner_id = csr.execute(
-            f'select player_id from players where name = "{owner}"'
-        ).fetchone()[0]
-    else:
-        owner_id = 'NULL'
-    
     if entity == 'player':
         csr.execute(
         f"""
             insert into players (name, is_default_player)
             values ('{name}', {int(is_default)})
         """)
-    if entity == 'list':
+    elif entity == 'list':
         csr.execute(
         f"""
             insert into lists (
-                name, player_id, creation_date, is_default_list
+                name, creation_date, is_default_list
             )
             values (
-                '{name}', '{owner_id}', strftime('%s','now'), {int(is_default)}
+                '{name}', strftime('%s','now'), {int(is_default)}
             )
         """)
-    if entity == 'deck':
+    elif entity == 'deck':
         csr.execute(
         f"""
-            insert into decks (name, player_id, creation_date)
-            values ('{name}', '{owner_id}', strftime('%s','now'))
+            insert into decks (name, creation_date)
+            values ('{name}', strftime('%s','now'))
         """)
     else:
         raise ValueError(f'Unknown {entity} entity!')
     if is_default:
         set_default_value(entity, name, csr)
     st.session_state.last_actions.append(
-            f'Player {name} was added!'
+            f'{entity.capitalize()} {name} was added!'
         )
 
 def delete_record(entity: str, name: str):
     csr = Db('user_data.db')
-    csr.execute(
+    csr.executescript(
     f"""
+        PRAGMA foreign_keys=ON;
         delete from {entity}s 
         where name = '{name}'
     """)
@@ -284,6 +331,39 @@ def update_table(entity, default_value, id, column, value):
             set {column} = '{value}'
             where {entity}_id = {id}
         """)
+
+def update_table_content(entity, card_dict, column, value):
+    csr = Db('user_data.db')
+    if not ((column == 'qnty') and (value > 0)):
+        csr.execute(
+        f"""
+            delete from {entity}_content
+            where
+                list_id = {card_dict['list_id']}
+                and card_uuid = X'{card_dict['card_uuid'].hex()}'
+                and condition_id = {card_dict['condition_id']}
+                and foil = {card_dict['foil']}
+                and language = '{card_dict['language']}'
+        """)
+    if not ((column == 'qnty') and (value == 0)):
+        card_dict[column] = value
+        if column != 'qnty':
+            add_method = 'qnty + excluded.qnty'
+        else:
+            add_method = 'excluded.qnty'
+        csr.execute(
+        f"""
+            insert into {entity}_content (
+                list_id, card_uuid, condition_id, foil, language, qnty
+            ) 
+            values(?, ?, ?, ?, ?, ?)
+            on conflict (
+                list_id, card_uuid, condition_id, foil, language
+            ) do update set qnty = {add_method}
+        """, 
+        (card_dict['list_id'], (card_dict['card_uuid']), card_dict['condition_id'],
+            card_dict['foil'], card_dict['language'], card_dict['qnty'])
+        )
 
 def columns_conversation(df):
     csr = Db('user_data.db')
@@ -361,14 +441,21 @@ def import_cards(
     if list_action != 'Skip':
         csr.execute(
         f"""
-            insert into list_content
+            insert into list_content (
+                list_id,
+                card_uuid,
+                condition_id,
+                foil,
+                language,
+                qnty
+            )
             select
                 li.list_id,
                 ca.card_uuid,
                 co.condition_id,
-                ci.qnty,
                 ci.foil,
-                la.language
+                la.language,
+                ci.qnty
             from card_import as ci
             left join lists as li
                 on ci.list_name = li.name
@@ -379,9 +466,14 @@ def import_cards(
                 on ci.condition_code = co.code
             left join languages as la
                 on ci.language_code = la.language_code
+            on conflict (
+                list_id, card_uuid, condition_id,
+                foil, language
+            ) do update set
+                qnty = qnty + excluded.qnty
         """)
         st.session_state.last_actions.append(
-            f'{df.shape[0]} cards added to list {list_name}'
+            f'{df["Qnty"].sum()} cards added to list {list_name}'
         )
     if deck_action != 'Skip':
         csr.execute(
@@ -409,5 +501,5 @@ def import_cards(
                 on ci.language_code = la.language_code
         """)
         st.session_state.last_actions.append(
-            f'{df.shape[0]} cards added to deck {list_name}'
+            f'{df["Qnty"].sum()} cards added to deck {deck_name}'
         )
