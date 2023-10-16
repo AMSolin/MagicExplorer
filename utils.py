@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import json
 import streamlit as st
+import datetime
 import time
 from typing import List, Tuple
 
@@ -28,8 +29,8 @@ class Db:
     def executescript(self, sql):
         self.csr.executescript(sql)
 
-    def read_sql(self, query):
-        return pd.read_sql(query, self.conn)
+    def read_sql(self, query, parse_dates=None):
+        return pd.read_sql(query, self.conn, parse_dates=parse_dates)
     
     def close_connect(self):
         self.conn.close()
@@ -206,12 +207,14 @@ def get_lists():
             datetime(l.creation_date, 'unixepoch', 'localtime') as creation_date,
             l.note,
             l.is_default_list,
+            l.player_id,
             p.name as owner
         from lists as l
         left join players as p
             on l.player_id = p.player_id
         order by is_default_list desc, l.creation_date
-    """)
+    """,
+    parse_dates='creation_date')
     result['create_ns'] = time.time_ns()
     return result
 
@@ -321,6 +324,13 @@ def delete_record(entity: str, name: str):
         )
 
 def update_table(entity, default_value, id, column, value):
+    if isinstance(value, str) and 'session_state' in value:
+        value = eval(value)
+    if isinstance(value, datetime.date):
+        value = int(datetime.datetime(
+                value.year, value.month, value.day
+            ).timestamp()
+        )
     csr = Db('user_data.db')
     if column == f'is_default_{entity}':
         set_default_value(entity, default_value, csr)

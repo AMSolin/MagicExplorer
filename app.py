@@ -14,7 +14,10 @@ st.markdown(
         f"""
 			<style>
 			.appview-container .main .block-container{{
-					padding-top: {padding_top}rem;    }}
+					padding-top: {padding_top}rem;
+					padding-right: {1}rem;
+					padding-left: {1}rem;
+					}}
 			</style>
 			""",
         unsafe_allow_html=True,

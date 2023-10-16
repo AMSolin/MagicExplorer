@@ -81,7 +81,7 @@ def get_content():
                     delete_record('list', deleted_list)
                     del st.session_state.current_list_id
                     st.experimental_rerun()
-    list_side, overview_side = st.columns((0.7, 0.3))
+    list_side, overview_side = st.columns((0.5, 0.5))
 
     with list_side:
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
@@ -126,7 +126,7 @@ def get_content():
                 'type': 'Type',
                 'language_code': 'Lang',
                 'set_code': 'Set',
-                'rarity': 'Rarity',
+                'rarity': None,
                 'mana_cost': 'Cost',
                 'foil': st.column_config.CheckboxColumn('Foil'),
                 'condition_code': 'Cond',
@@ -146,24 +146,101 @@ def get_content():
             expanded=st.session_state.active_expander == 'list_info'
         )
         if expand_check:
-            list_name, creation_dtm, note, owner = df_lists \
-                .loc[mask_list, ['name', 'creation_date', 'note', 'owner']] \
+            list_name, creation_dtm, note, player_id, owner = df_lists \
+                .loc[
+                    mask_list,
+                    ['name', 'creation_date', 'note', 'player_id', 'owner']
+                ] \
                 .values.ravel()
-            e_list_info.write(list_name)
-            e_list_info.write(f'Creation_date: {creation_dtm}')
-            e_list_info.selectbox(
-                'List owner',
-                ['you', 'me']
-            )
-            e_list_info.text_area(
-                'Collection note',
-                'here will be \n'
-                'your notes \n'
-                'about this collection'
-            )
+            with e_list_info:
+                col_list_name, col_owner, col_creation_date =  \
+                    st.columns((0.4, 0.4, 0.2))
+                
+                def update_table_wrapper(**kwargs):
+                    try:
+                        update_table(**kwargs)
+                    except sqlite3.IntegrityError:
+                        e_list_info_container.error(
+                            f'Collection {st.session_state.v_list_name} already exist!'
+                        )
+                        st.session_state.v_list_name = list_name
+                
+                _ = col_list_name.text_input(
+                    'Collection name:',
+                    value=list_name,
+                    key='v_list_name',
+                    on_change=update_table_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'default_value': None,
+                        'id': st.session_state.current_list_id,
+                        'column': 'name',
+                        'value': 'st.session_state.v_list_name'
+                    }
+                )
+
+                df_players = get_players()[['player_id', 'name']]
+                if owner is not None:
+                    idx = int(
+                        df_players[
+                            df_players['player_id'] == player_id
+                        ].index[0]
+                    )
+                else:
+                    idx = None
+                col_owner.selectbox(
+                    'Owner:',
+                    options=df_players['player_id'],
+                    format_func=lambda x: dict(df_players.values)[x],
+                    index=idx,
+                    key='v_list_owner',
+                    placeholder='Choose owner',
+                    on_change=update_table_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'default_value': None,
+                        'id': st.session_state.current_list_id,
+                        'column': 'player_id',
+                        'value': 'st.session_state.v_list_owner'
+                    }
+                )
+
+                col_creation_date.date_input(
+                    'Creation date:',
+                    value=creation_dtm.to_pydatetime(),
+                    format="DD.MM.YYYY",
+                    key='v_creation_date',
+                    on_change=update_table_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'default_value': None,
+                        'id': st.session_state.current_list_id,
+                        'column': 'creation_date',
+                        'value': 'st.session_state.v_creation_date'
+                    }
+                )
+
+                e_list_info_container = st.container()
+                e_list_info_container.empty()
+                e_list_info.text_area(
+                    'Collection note',
+                    value=note,
+                    key='v_list_note',
+                    placeholder='Add your notes here',
+                    max_chars=256,
+                    on_change=update_table_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'default_value': None,
+                        'id': st.session_state.current_list_id,
+                        'column': 'note',
+                        'value': 'st.session_state.v_list_note'
+                    }
+                )
 
         if st.session_state.selected_card:
-            st.image(get_image_uris(*st.session_state.selected_card[4:]))
+            img_col, description_col =  st.columns((0.4, 0.6))
+            img_col.image(get_image_uris(*st.session_state.selected_card[4:]))
 
 
 
