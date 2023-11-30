@@ -7,6 +7,7 @@ import streamlit as st
 import datetime
 import time
 from typing import List, Tuple
+import extra_streamlit_components as stx
 
 sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
 sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
@@ -122,6 +123,7 @@ def search_set_by_name(card_name: str, card_lang: str):
             where
                 c.name = '{card_name}'
                 and c.language = '{card_lang}'
+                and coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
     else:
@@ -147,6 +149,8 @@ def search_set_by_name(card_name: str, card_lang: str):
                 on s.set_code = c.set_code
             left join languages as l
                 on f.language = l.language
+            where
+                coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
     result = csr.read_sql(query)
@@ -174,12 +178,11 @@ def generate_css_set_icons(sets_dict):
     return css
 
 @st.cache_data
-def get_image_uris(set_code, card_number, lang):
+def get_card_properties(set_code, card_number, lang):
     api_url = 'https://api.scryfall.com/cards'
     r = requests.get(f'{api_url}/{set_code.lower()}/{card_number}/{lang}').text
-    uri = json.loads(r)['image_uris']['normal']
-    time.sleep(0.1)
-    return uri
+    card_props = json.loads(r)
+    return card_props
 
 def get_card_images(df, selected_set):
     content = ''
@@ -187,7 +190,13 @@ def get_card_images(df, selected_set):
         .drop(columns=['name', 'keyrune_code'])
     for row in df_filtered.itertuples(index=False):
         set_code, card_number, lang = row
-        uri = get_image_uris(set_code, card_number, lang)
+        card_props = get_card_properties(set_code, card_number, lang)
+        if card_props.get('card_faces'):
+            side = st.radio('_', ['Front', 'Back'], label_visibility='hidden', horizontal=True, key=f'v_import_card_side {set_code} {card_number} {lang}')
+            ix = 0 if side == 'Front' else 1
+            uri = card_props['card_faces'][ix]['image_uris']['normal'] #TODO add change img with placeholder
+        else:
+            uri = card_props['image_uris']['normal'] #TODO add change img with placeholder
         content += f'<a href="#" id="{set_code} {card_number} {lang} {time.time_ns()}"><img width="24%" src="{uri}"></a>\n'
     return content
 
@@ -247,7 +256,9 @@ def get_list_content(list_id):
             on ca.set_code = se.set_code
         left join languages as la
             on lc.language = la.language
-        where list_id = {list_id}
+        where
+            list_id = {list_id}
+            and coalesce(ca.side, 'a') = 'a'
         order by ca.name
     """)
     result['create_ns'] = time.time_ns()
@@ -513,3 +524,10 @@ def import_cards(
         st.session_state.last_actions.append(
             f'{df["Qnty"].sum()} cards added to deck {deck_name}'
         )
+
+def show_tab_bar(tabs: list):
+    data = []
+    for tab in tabs:
+        data.append(stx.TabBarItemData(id=tab, title=tab, description=None))
+    tab_bar = stx.tab_bar(data=data, default=tabs[0])
+    return tab_bar

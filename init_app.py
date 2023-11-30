@@ -237,6 +237,7 @@ def reset_table_cards():
             c.number,
             c.setcode,
             i.scryfallid,
+            c.side,
             c.language,
             c.manacost,
             c.manavalue,
@@ -259,6 +260,7 @@ def reset_table_cards():
             number text,
             set_code text,
             scryfall_id guid,
+            side text,
             language text,
             mana_cost text,
             mana_value text,
@@ -279,6 +281,7 @@ def reset_table_cards():
                 number,
                 set_code,
                 scryfall_id,
+                side,
                 language,
                 mana_cost,
                 mana_value,
@@ -289,8 +292,10 @@ def reset_table_cards():
                 power,
                 toughness
             )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (uuid.UUID(r[0]), r[1], r[2], r[3], uuid.UUID(r[4]), r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13])
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (uuid.UUID(r[0]), r[1], r[2], r[3], uuid.UUID(r[4]), r[5], r[6], r[7], 
+         r[8], r[9], r[10], r[11], r[12], r[13], r[14])
         )
     csr.execute("attach database './data/app_data.db' as ad")
     csr.executescript(
@@ -302,6 +307,7 @@ def reset_table_cards():
             number text,
             set_code text ,
             scryfall_id guid,
+            side text,
             language text,
             mana_cost text,
             mana_value text,
@@ -320,6 +326,7 @@ def reset_table_cards():
             number,
             set_code,
             scryfall_id,
+            side,
             language,
             mana_cost,
             mana_value,
@@ -336,6 +343,7 @@ def reset_table_cards():
             number,
             set_code,
             scryfall_id,
+            side,
             language,
             mana_cost,
             mana_value,

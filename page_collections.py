@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from utils import *
 
 def get_content():
@@ -81,7 +80,7 @@ def get_content():
                     delete_record('list', deleted_list)
                     del st.session_state.current_list_id
                     st.experimental_rerun()
-    list_side, overview_side = st.columns((0.5, 0.5))
+    list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
@@ -121,11 +120,11 @@ def get_content():
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1
                 ),
-                'name': 'Name',
+                'name': 'Name', #TODO display in native card language
                 'card_number': None,
-                'type': 'Type',
-                'language_code': 'Lang',
-                'set_code': 'Set',
+                'type': 'Type', #TODO display in native card language
+                'language_code': None,
+                'set_code': None,
                 'rarity': None,
                 'mana_cost': 'Cost',
                 'foil': st.column_config.CheckboxColumn('Foil'),
@@ -140,108 +139,165 @@ def get_content():
             on_change=list_content_callback
         )
     with overview_side:
-        expand_check =  st.session_state.active_expander == 'list_info'
-        e_list_info = st.expander(
-            'Collection info',
-            expanded=st.session_state.active_expander == 'list_info'
-        )
-        if expand_check:
+
+        collection_tabs =[
+            'Collection & cards overview', 'Add cards'
+        ]
+        collection_active_tab = show_tab_bar(collection_tabs)
+        if collection_active_tab == collection_tabs[0]:
             list_name, creation_dtm, note, player_id, owner = df_lists \
                 .loc[
                     mask_list,
                     ['name', 'creation_date', 'note', 'player_id', 'owner']
                 ] \
                 .values.ravel()
-            with e_list_info:
-                col_list_name, col_owner, col_creation_date =  \
-                    st.columns((0.4, 0.4, 0.2))
-                
-                def update_table_wrapper(**kwargs):
-                    try:
-                        update_table(**kwargs)
-                    except sqlite3.IntegrityError:
-                        e_list_info_container.error(
-                            f'Collection {st.session_state.v_list_name} already exist!'
-                        )
-                        st.session_state.v_list_name = list_name
-                
-                _ = col_list_name.text_input(
-                    'Collection name:',
-                    value=list_name,
-                    key='v_list_name',
-                    on_change=update_table_wrapper,
-                    kwargs={
-                        'entity': 'list',
-                        'default_value': None,
-                        'id': st.session_state.current_list_id,
-                        'column': 'name',
-                        'value': 'st.session_state.v_list_name'
-                    }
-                )
-
-                df_players = get_players()[['player_id', 'name']]
-                if owner is not None:
-                    idx = int(
-                        df_players[
-                            df_players['player_id'] == player_id
-                        ].index[0]
+            col_list_name, col_owner, col_creation_date, col_counter =  \
+                st.columns((0.3, 0.3, 0.2, 0.15))
+            
+            def update_table_wrapper(**kwargs):
+                try:
+                    update_table(**kwargs)
+                except sqlite3.IntegrityError:
+                    list_info_container.error(
+                        f'Collection {st.session_state.v_list_name} already exist!'
                     )
-                else:
-                    idx = None
-                col_owner.selectbox(
-                    'Owner:',
-                    options=df_players['player_id'],
-                    format_func=lambda x: dict(df_players.values)[x],
-                    index=idx,
-                    key='v_list_owner',
-                    placeholder='Choose owner',
-                    on_change=update_table_wrapper,
-                    kwargs={
-                        'entity': 'list',
-                        'default_value': None,
-                        'id': st.session_state.current_list_id,
-                        'column': 'player_id',
-                        'value': 'st.session_state.v_list_owner'
-                    }
-                )
+                    st.session_state.v_list_name = list_name
+            
+            _ = col_list_name.text_input(
+                'Collection name:',
+                value=list_name,
+                key='v_list_name',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'default_value': None,
+                    'id': st.session_state.current_list_id,
+                    'column': 'name',
+                    'value': 'st.session_state.v_list_name'
+                }
+            )
 
-                col_creation_date.date_input(
-                    'Creation date:',
-                    value=creation_dtm.to_pydatetime(),
-                    format="DD.MM.YYYY",
-                    key='v_creation_date',
-                    on_change=update_table_wrapper,
-                    kwargs={
-                        'entity': 'list',
-                        'default_value': None,
-                        'id': st.session_state.current_list_id,
-                        'column': 'creation_date',
-                        'value': 'st.session_state.v_creation_date'
-                    }
+            df_players = get_players()[['player_id', 'name']]
+            if owner is not None:
+                idx = int(
+                    df_players[
+                        df_players['player_id'] == player_id
+                    ].index[0]
                 )
+            else:
+                idx = None
+            col_owner.selectbox(
+                'Owner:',
+                options=df_players['player_id'],
+                format_func=lambda x: dict(df_players.values)[x],
+                index=idx,
+                key='v_list_owner',
+                placeholder='Choose owner',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'default_value': None,
+                    'id': st.session_state.current_list_id,
+                    'column': 'player_id',
+                    'value': 'st.session_state.v_list_owner'
+                }
+            )
 
-                e_list_info_container = st.container()
-                e_list_info_container.empty()
-                e_list_info.text_area(
-                    'Collection note',
-                    value=note,
-                    key='v_list_note',
-                    placeholder='Add your notes here',
-                    max_chars=256,
-                    on_change=update_table_wrapper,
-                    kwargs={
-                        'entity': 'list',
-                        'default_value': None,
-                        'id': st.session_state.current_list_id,
-                        'column': 'note',
-                        'value': 'st.session_state.v_list_note'
-                    }
-                )
+            col_creation_date.date_input(
+                'Creation date:',
+                value=creation_dtm.to_pydatetime(),
+                format="DD.MM.YYYY",
+                key='v_creation_date',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'default_value': None,
+                    'id': st.session_state.current_list_id,
+                    'column': 'creation_date',
+                    'value': 'st.session_state.v_creation_date'
+                }
+            )
 
+            col_counter.text_input(
+                'Cards total:',
+                value=df_list_content['qnty'].sum(),
+                disabled=True
+            )
+
+            list_info_container = st.container()
+            list_info_container.text_area(
+                'Collection note',
+                value=note,
+                key='v_list_note',
+                placeholder='Add your notes here',
+                max_chars=256,
+                height=10,
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'default_value': None,
+                    'id': st.session_state.current_list_id,
+                    'column': 'note',
+                    'value': 'st.session_state.v_list_note'
+                }
+            )
         if st.session_state.selected_card:
-            img_col, description_col =  st.columns((0.4, 0.6))
-            img_col.image(get_image_uris(*st.session_state.selected_card[4:]))
 
+            card_tabs =['Card overview', 'Edit card']
+            card_active_tab = show_tab_bar(card_tabs)
+            img_col, prop_col =  st.columns((0.5, 0.5))
+            card_props = get_card_properties(*st.session_state.selected_card[4:])
+            img_container = img_col.container()
+            if card_props.get('card_faces'):
+                side = img_col.radio(
+                    'no label', ['Front', 'Back'],
+                    label_visibility='collapsed', 
+                    horizontal=True)
+                ix = 0 if side == 'Front' else 1
+                img_container.image(card_props['card_faces'][ix]['image_uris']['normal'])
+            else:
+                ix = -1
+                img_container.image(card_props['image_uris']['normal'])
+            if card_active_tab == card_tabs[0]:
+                def get_card_prop(props_dict, prop_name, side_ix):
+                    value = props_dict.get(
+                        prop_name, 
+                        card_props.get('card_faces', [{}])[side_ix].get(prop_name, None)
+                    )
+                    return value
+                if get_card_prop(card_props, 'power', ix):
+                    power = get_card_prop(card_props, 'power', ix)
+                    toughness = get_card_prop(card_props, 'toughness', ix)
+                    card_props['P/T'] =  \
+                        f'{power}/{toughness}'
+                list_legalities = [
+                    'standard', 'pioneer', 'modern', 'legacy', 
+                    'vintage', 'commander', 'pauper', 'historic', 'alchemy'
+                ]
+                legalities = ''
+                for legality in list_legalities:
+                    if card_props['legalities'][legality] == 'legal':
+                        legalities += (f'{legality}, '.capitalize())
+                card_props['Legalities_only'] = legalities[:-2]
+                props_aliases = [
+                    ('name', 'Card Name'), ('mana_cost', 'Mana Cost'),
+                    ('cmc', 'Mana Value'), ('type_line', 'Types'),
+                    ('oracle_text', 'Card text'), ('flavor_text', 'Flavor Text'),
+                    ('P/T', 'P/T'), ('rarity', 'Rarity'),
+                    ('collector_number', 'Card Number'), ('artist', 'Artist'),
+                    ('set_name', 'Set Name'), ('released_at', 'Release'),
+                    ('Legalities_only', 'Legalities')
+                ]
+
+                text_field = ''
+                for property, alias in props_aliases:
+                    property_value = get_card_prop(card_props, property, ix)
+                    if property_value:
+                        text_field += f"""**{alias}**:&nbsp;&nbsp;{property_value}  \n"""
+                
+                prop_col.markdown(text_field)
+            if card_active_tab == card_tabs[1]:
+                prop_col.info('working in progress')
 
 
 
