@@ -233,6 +233,7 @@ def get_list_content(list_id):
     result = csr.read_sql(
     f"""
         select
+            lc.list_id,
             lc.card_uuid,
             lc.condition_id,
             lc.language,
@@ -353,9 +354,13 @@ def update_table(entity, default_value, id, column, value):
             where {entity}_id = {id}
         """)
 
-def update_table_content(entity, card_dict, column, value):
+def update_table_content(entity, card_id, column, value):
+    if isinstance(value, str) and 'session_state' in value:
+        value = eval(value)
+    card_dict = card_id.to_dict()
     csr = Db('user_data.db')
     if not ((column == 'qnty') and (value > 0)):
+        #Если установили qnty = 0 или изменили другое поле
         csr.execute(
         f"""
             delete from {entity}_content
@@ -366,11 +371,16 @@ def update_table_content(entity, card_dict, column, value):
                 and foil = {card_dict['foil']}
                 and language = '{card_dict['language']}'
         """)
+        st.session_state.selected_card = None
     if not ((column == 'qnty') and (value == 0)):
+        #Если не устанаваливали qnty = 0
         card_dict[column] = value
         if column != 'qnty':
+            #В случае конфликта при изменении ключевых полей
+            #сложим новое и прежнее значения qnty вместе
             add_method = 'qnty + excluded.qnty'
         else:
+            #Иначе в случае конфликта обновим значение qnty
             add_method = 'excluded.qnty'
         csr.execute(
         f"""

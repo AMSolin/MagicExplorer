@@ -1,3 +1,4 @@
 streamlit
 streamlit_searchbox
 st_click_detector
+extra_streamlit_components

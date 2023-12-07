@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
     # menu_items={} 
 )
-padding_top = 0
+padding_top = 2
 st.markdown(
         f"""
 			<style>
@@ -25,7 +25,7 @@ st.markdown(
 
 def main():
 
-	st.title('Magic explorer')
+	# st.title('Magic explorer') #TODO return after multi-page version
 	menu = ['Init', 'Cards', 'Import', 'Players', 'Collections', 'Decks']
 	choice = st.sidebar.selectbox('Menu',menu)
 	if choice == 'Init':

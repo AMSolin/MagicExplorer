@@ -85,35 +85,41 @@ def get_content():
     with list_side:
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
         card_id_cols = [
-            'card_uuid', 'condition_id', 'foil', 'language',
+            'list_id', 'card_uuid', 'condition_id', 'foil', 'language',
+            'qnty',
             'set_code', 'card_number', 'language_code'
         ]
-        if st.session_state.selected_card:
-            mask = (df_list_content[card_id_cols[:4]] == st.session_state.selected_card[:4]).all(1)
+        if st.session_state.selected_card is not None:
+            mask = (df_list_content[card_id_cols[:5]] == st.session_state.selected_card[:5]).all(1)
             df_list_content.loc[mask, 'open'] = True
         
-        def list_content_callback():
-            changes = [
-                (ix, [(col, val) for col, val in pair.items()])
-                for ix, pair in st.session_state.v_list_content['edited_rows'].items()
-            ]
-            ix, [[col, val]]= changes[0]
-            if col == 'open':
-                st.session_state.selected_card = df_list_content[
-                    card_id_cols
-                ].iloc[ix].tolist()
+        def update_table_content_wrapper(**kwargs):
+            if 'value' not in kwargs:
+                # Если функция была вызвана при изменении таблицы
+                changes = [
+                    (ix, [(column, value) for column, value in pair.items()])
+                    for ix, pair in st.session_state.v_list_content['edited_rows'].items()
+                ]
+                ix, [[column, value]]= changes[0]
+                if column == 'open':
+                    if value == True:
+                        st.session_state.selected_card = df_list_content[
+                            card_id_cols
+                        ].iloc[ix]
+                    else:
+                        st.session_state.selected_card = None
+                    return
+                update_table_content('list', df_list_content.iloc[ix], column, value)
             else:
-                card_dict = df_list_content.iloc[ix].to_dict()
-                card_dict['list_id'] = int(st.session_state.current_list_id)
-                try:
-                    update_table_content('list', card_dict, col, val)
-                except sqlite3.IntegrityError:
-                     table_container.error(f'Collection {val} already exist!')
+                # Если фунция была вызвана при изменении виджета
+                update_table_content(**kwargs)
+        
         _ = st.data_editor(
             df_list_content,
             key='v_list_content',
             hide_index=True,
             column_config={
+                'list_id': None,
                 'card_uuid': None,
                 'condition_id': None,
                 'language': None,
@@ -136,7 +142,7 @@ def get_content():
                 'name', 'type', 'language_code', 'set_code', 'rarity', 
                 'mana_cost', 'foil', 'condition_code']
             ,
-            on_change=list_content_callback
+            on_change=update_table_content_wrapper
         )
     with overview_side:
 
@@ -186,7 +192,7 @@ def get_content():
                 )
             else:
                 idx = None
-            col_owner.selectbox(
+            _ = col_owner.selectbox(
                 'Owner:',
                 options=df_players['player_id'],
                 format_func=lambda x: dict(df_players.values)[x],
@@ -203,7 +209,7 @@ def get_content():
                 }
             )
 
-            col_creation_date.date_input(
+            _ = col_creation_date.date_input(
                 'Creation date:',
                 value=creation_dtm.to_pydatetime(),
                 format="DD.MM.YYYY",
@@ -218,7 +224,7 @@ def get_content():
                 }
             )
 
-            col_counter.text_input(
+            _ = col_counter.text_input(
                 'Cards total:',
                 value=df_list_content['qnty'].sum(),
                 disabled=True
@@ -241,18 +247,21 @@ def get_content():
                     'value': 'st.session_state.v_list_note'
                 }
             )
-        if st.session_state.selected_card:
+        if st.session_state.selected_card is not None:
 
             card_tabs =['Card overview', 'Edit card']
             card_active_tab = show_tab_bar(card_tabs)
             img_col, prop_col =  st.columns((0.5, 0.5))
-            card_props = get_card_properties(*st.session_state.selected_card[4:])
+            card_api_key = [val for val in st.session_state.selected_card[6:].values]
+            card_props = get_card_properties(*card_api_key)
             img_container = img_col.container()
             if card_props.get('card_faces'):
                 side = img_col.radio(
-                    'no label', ['Front', 'Back'],
+                    'no label',
+                    ['Front', 'Back'],
                     label_visibility='collapsed', 
-                    horizontal=True)
+                    horizontal=True
+                )
                 ix = 0 if side == 'Front' else 1
                 img_container.image(card_props['card_faces'][ix]['image_uris']['normal'])
             else:
@@ -297,7 +306,43 @@ def get_content():
                 
                 prop_col.markdown(text_field)
             if card_active_tab == card_tabs[1]:
-                prop_col.info('working in progress')
+                _ = prop_col.selectbox(
+                    'Collection:',
+                    options=df_lists['list_id'],
+                    format_func=lambda x: dict(
+                        df_lists[['list_id', 'name']].values
+                    )[x],
+                    index=int(df_lists[
+                        df_lists['list_id'] == st.session_state.current_list_id
+                        ].index[0]
+                    ),
+                    key='v_card_list',
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'card_id': st.session_state.selected_card,
+                        'column': 'list_id',
+                        'value': 'st.session_state.v_card_list',
+
+                    }
+                )
+                _ = prop_col.selectbox(
+                    'Language:',
+                    key='v_card_language'
+                )
+                prop_col.text('Set:')
+                #TODO panel of set icons
+                _ = prop_col.radio(
+                    'Card number:',
+                    horizontal=True
+                )
+                _ = prop_col.toggle('Foil')
+                _ = prop_col.selectbox(
+                    'Condition:',
+                    key='v_card_condition'
+                )
+
+
 
 
 
