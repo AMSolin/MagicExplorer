@@ -7,7 +7,7 @@ import streamlit as st
 import datetime
 import time
 from typing import List, Tuple
-# import extra_streamlit_components as stx
+import extra_streamlit_components as stx
 
 sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
 sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
@@ -535,12 +535,12 @@ def import_cards(
             f'{df["Qnty"].sum()} cards added to deck {deck_name}'
         )
 
-# def show_tab_bar(tabs: list):
-#     data = []
-#     for tab in tabs:
-#         data.append(stx.TabBarItemData(id=tab, title=tab, description=None))
-#     tab_bar = stx.tab_bar(data=data, default=tabs[0])
-#     return tab_bar
+def show_tab_bar(tabs: list):
+    data = []
+    for tab in tabs:
+        data.append(stx.TabBarItemData(id=tab, title=tab, description=None))
+    tab_bar = stx.tab_bar(data=data, default=tabs[0])
+    return tab_bar
 
 def get_delver_lists_names():
     csr = Db('../import/2022_Jun_23_13-17_exported.db')
@@ -561,3 +561,20 @@ def get_delver_lists_names():
 #     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
 #     csr = Db('import/2022_Jun_23_13-17_exported.db', detect_types=sqlite3.PARSE_DECLTYPES)
 #     csr.execute("attach database './import/AllPrintings.sqlite' as ap")
+    # """
+    #     select
+    #         i.scryfallid,
+    #         exp.card as delver_card_id,
+    #         exp.foil,
+    #         exp.condition,
+    #         exp.quantity,
+    #         exp.list as delver_list_id,
+    #         c.name
+    #     from cards as exp
+    #     left join apk_db.cards as apk
+    #         on exp.card = apk._id
+    #     left join ap_db.cardidentifiers as i
+    #         on apk.scryfall_id = i.scryfallid
+    #     left join ap_db.cards as c
+    #         on c.uuid = i.uuid
+    # """
