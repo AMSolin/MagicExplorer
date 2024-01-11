@@ -541,3 +541,18 @@ def show_tab_bar(tabs: list):
         data.append(stx.TabBarItemData(id=tab, title=tab, description=None))
     tab_bar = stx.tab_bar(data=data, default=tabs[0])
     return tab_bar
+
+def get_delver_lists_names():
+    csr = Db('../import/2022_Jun_23_13-17_exported.dlens')
+    result = csr.read_sql(
+    """
+    select
+        "_id" as delver_list_id,
+        category,
+        name,
+        creation
+    from lists
+    """
+    )
+    return result
+
