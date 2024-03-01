@@ -266,6 +266,45 @@ def get_list_content(list_id):
     result['create_ns'] = time.time_ns()
     return result
 
+def get_deck_content(deck_id):
+    csr = Db('user_data.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            dc.deck_id,
+            dc.deck_type_id,
+            dc.card_uuid,
+            dc.condition_id,
+            dc.language,
+            dc.qnty,
+            ca.name, --#TODO change name according language
+            ca.number as card_number,
+            ca.type,
+            la.language_code,
+            se.set_code,
+            --se.keyrune_code, #TODO add keyrune symbol
+            ca.rarity,
+            ca.mana_cost,
+            dc.foil,
+            co.code as condition_code
+        from deck_content as dc
+        left join cards as ca
+            on dc.card_uuid = ca.card_uuid
+        left join card_condition as co
+            on dc.condition_id = co.condition_id
+        left join sets as se
+            on ca.set_code = se.set_code
+        left join languages as la
+            on dc.language = la.language
+        where
+            deck_id = {deck_id}
+            and coalesce(ca.side, 'a') = 'a'
+        order by ca.name
+    """)
+    result['create_ns'] = time.time_ns()
+    return result
+
 def get_decks():
     csr = Db('user_data.db')
     result = csr.read_sql('select * from decks order by deck_id')
