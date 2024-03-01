@@ -12,7 +12,7 @@ def check_table(
     reset_table_btn = btn_col.button('Reset table', key=f'reset_{table_name}_btn')
     if reset_table_btn:
         reset_table_func()
-        st.experimental_rerun()
+        st.rerun()
 
 def get_rows_count(db_name: str, table_name: str):
     csr = Db(db_name)

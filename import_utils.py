@@ -73,4 +73,4 @@ def export_section():
                         list_action, list_name, deck_action, deck_name
                     )
                     del st.session_state.selection_table
-                    st.experimental_rerun()
+                    st.rerun()

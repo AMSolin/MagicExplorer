@@ -59,7 +59,7 @@ def get_content():
                 if submitted and new_deck.strip() != '':
                     try:
                         add_new_record('deck', new_deck)
-                        st.experimental_rerun()
+                        st.rerun()
                     except sqlite3.IntegrityError:
                         st.error(f'Deck {new_deck} already exist!')
         elif (action == 'Delete') and (df_decks.shape[0] > 1):
@@ -75,7 +75,7 @@ def get_content():
                 if submitted:
                     delete_record('list', deck_to_delete)
                     del st.session_state.current_deck_id
-                    st.experimental_rerun()
+                    st.rerun()
     list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:

@@ -106,6 +106,6 @@ def get_content():
                 .groupby([col for col in edited_table.columns if col not in ['Qnty', 'row_order']]) \
                 .agg(Qnty=('Qnty','sum'), row_order=('row_order', 'min')) \
                 .reset_index().sort_values(by='row_order', ascending=False)
-            st.experimental_rerun()
+            st.rerun()
 
         export_section()
