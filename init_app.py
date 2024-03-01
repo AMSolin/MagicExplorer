@@ -43,25 +43,26 @@ def reset_table_players():
     """)
 
 def reset_table_card_condition():
-    csr = Db('user_data.db')
+    csr = Db('app_data.db')
     csr.executescript(
     """
         drop table if exists card_condition;
         create table card_condition (
-            code text not null primary key,
+            condition_id integer primary key,
+            code text not null,
             name text not null unique
         );
-        insert into card_condition (code, name)
+        insert into card_condition (condition_id, code, name)
         values 
-            ('NM', 'Near Mint'), 
-            ('SP', 'Slightly Played'),
-            ('MP', 'Moderately Played'),
-            ('HP', 'Heavily Played'),
-            ('D', 'Damaged');
+            (1, 'NM', 'Near Mint'), 
+            (2, 'SP', 'Slightly Played'),
+            (3, 'MP', 'Moderately Played'),
+            (4, 'HP', 'Heavily Played'),
+            (5, 'D', 'Damaged');
     """)
 
 def reset_table_deck_types():
-    csr = Db('user_data.db')
+    csr = Db('app_data.db')
     csr.executescript(
     """
         drop table if exists deck_types;
@@ -70,7 +71,7 @@ def reset_table_deck_types():
             name text not null unique
         );
         insert into deck_types (deck_type_id, name)
-        values (1, 'main'), (2, 'sideboard'), (3, 'maybe');
+        values (0, 'main'), (1, 'side'), (2, 'maybe');
     """)
 
 def reset_table_lists():
@@ -146,17 +147,18 @@ def reset_table_deck_content():
         create table deck_content (
             deck_id integer,
             card_uuid guid,
+            is_commander integer,
             condition_code text,
             foil integer,
             language text,
-            deck_type_id integer,
+            deck_type_name text,
             qnty integer,
             foreign key (deck_id)
               references decks(deck_id) on update cascade on delete cascade
         );
         create unique index idx_deck_content
         on deck_content (
-            deck_id, card_uuid, condition_code, foil, language, deck_type_id
+            deck_id, card_uuid, condition_code, foil, language, deck_type_name
         );
     """)
 

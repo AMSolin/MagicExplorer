@@ -270,7 +270,7 @@ def get_deck_content(deck_id):
     f"""
         select
             dc.deck_id,
-            dc.deck_type_id,
+            dc.deck_type_name,
             dc.card_uuid,
             dc.condition_code,
             dc.language,
@@ -524,12 +524,20 @@ def import_cards(
     if deck_action != 'Skip':
         csr.execute(
         f"""
-            insert into deck_content
+            insert into deck_content ( --#TODO add commander column 
+                deck_id,
+                card_uuid,
+                condition_code,
+                deck_type_name,
+                qnty,
+                foil,
+                language
+            )
             select
                 de.deck_id,
                 ca.card_uuid,
                 ci.condition_code,
-                dt.deck_type_id,
+                ci.deck_type_name,
                 ci.qnty,
                 ci.foil,
                 la.language
@@ -539,8 +547,6 @@ def import_cards(
             left join ad.cards as ca
                 on ci.set_code = ca.set_code 
                     and ci.number = ca.number
-            left join deck_types as dt
-                on ci.deck_type_name = dt.name
             left join languages as la
                 on ci.language_code = la.language_code
         """)
@@ -575,6 +581,7 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
     f"""
         attach database '{dlens_db_path}' as exp_db;
         attach database '{ut_db_path}' as apk_db;
+        attach database './data/app_data.db' as app_db;
         attach database './data/temp/temp_db.db' as temp_db;
     """)
     df_import = csr.read_sql(
@@ -597,6 +604,14 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
             end as condition_name,
             cards.foil,
             cards.general as is_commander,
+            case
+                when cards.tab = 0
+                    then 'main'
+                when cards.tab = 1
+                    then 'side'
+                when cards.tab = 2
+                    then 'maybe'
+            end as deck_type_name,
             cards.quantity as qnty,
             lists._id as import_list_id,
             lists.name as name,
@@ -624,6 +639,7 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
             condition_name text,
             foil integer,
             is_commander integer,
+            deck_type_name text,
             qnty integer,
             import_list_id integer,
             name text,
@@ -640,6 +656,9 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
         """,
         df_import[columns].values
     )
+    renamed_ddl = create_table_ddl('temp_db.import_cards') \
+        .replace('scryfall_id', 'card_uuid') \
+        .replace('condition_name', 'condition_code')
     csr.executescript(
     f"""
         drop table if exists temp_db.import_lists;
@@ -657,8 +676,21 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
         drop table if exists temp_db.import_cards;
         {create_table_ddl('temp_db.import_cards')};
         insert into temp_db.import_cards ({', '.join(columns[:-3])})
-        select {', '.join(columns[:-3])}
-        from import_cards_temp;
+        select 
+            ca.card_uuid,
+            t.language,
+            cc.code as condition_code,
+            t.foil,
+            t.is_commander,
+            t.deck_type_name,
+            t.qnty,
+            t.import_list_id
+        from import_cards_temp as t
+        left join app_db.cards as ca
+            on t.scryfall_id = ca.scryfall_id
+        left join app_db.card_condition as cc
+            on t.condition_name = cc.name
+        ;
     """)
 def get_import_names():
     csr = Db('temp/temp_db.db', detect_types=sqlite3.PARSE_DECLTYPES)
