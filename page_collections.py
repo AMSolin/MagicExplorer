@@ -29,7 +29,9 @@ def get_content():
                 default_list = df_lists.iloc[ix].loc['name']
                 list_id = df_lists.iloc[ix].loc['list_id']
                 try:
-                    update_table('list', default_list, list_id, col, val)
+                    update_table(
+                        'list', list_id, col, val, default_value=default_list
+                    )
                 except sqlite3.IntegrityError:
                      table_container.error(f'Collection {val} already exist!')  
 
@@ -176,7 +178,6 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'default_value': None,
                     'id': st.session_state.current_list_id,
                     'column': 'name',
                     'value': 'st.session_state.v_list_name'
@@ -202,7 +203,6 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'default_value': None,
                     'id': st.session_state.current_list_id,
                     'column': 'player_id',
                     'value': 'st.session_state.v_list_owner'
@@ -217,7 +217,6 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'default_value': None,
                     'id': st.session_state.current_list_id,
                     'column': 'creation_date',
                     'value': 'st.session_state.v_creation_date'
@@ -241,7 +240,6 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'default_value': None,
                     'id': st.session_state.current_list_id,
                     'column': 'note',
                     'value': 'st.session_state.v_list_note'

@@ -49,10 +49,16 @@ def reset_table_card_condition():
         drop table if exists card_condition;
         create table card_condition (
             condition_id integer primary key,
-            code text not null unique
+            code text not null unique,
+            name text not null unique
         );
-        insert into card_condition (condition_id, code)
-        values (1, 'NM'), (2, 'SP'), (3, 'MP'), (4, 'HP'), (5, 'D');
+        insert into card_condition (condition_id, code, name)
+        values 
+            (1, 'NM', 'Near Mint'), 
+            (2, 'SP', 'Slightly Played'),
+            (3, 'MP', 'Moderately Played'),
+            (4, 'HP', 'Heavily Played'),
+            (5, 'D', 'Damaged');
     """)
 
 def reset_table_deck_types():
@@ -168,11 +174,20 @@ def reset_table_card_names():
         insert into card_names (
             name, language
         )
-        select distinct name, language
-        from ap.cards
-        union all
-        select distinct name, language
-        from ap.cardForeignData
+        select distinct
+            name,
+            case
+                when language = 'Portuguese (Brazil)'
+                    then 'Portuguese'
+                else language
+            end as language
+        from (
+            select name, language
+            from ap.cards
+            union all
+            select name, language
+            from ap.cardForeignData
+        ) as unioned_cards
     """)
 
 def reset_table_sets():
@@ -209,7 +224,7 @@ def reset_table_languages():
             ('French', 'fr'),
             ('German', 'de'),
             ('Italian', 'it'),
-            ('Portuguese (Brazil)', 'pt'),
+            ('Portuguese', 'pt'),
             ('Japanese', 'ja'),
             ('Korean', 'ko'),
             ('Russian', 'ru'),
@@ -228,19 +243,23 @@ def reset_table_cards():
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
-    rows = csr.execute(
+    csr.executescript(
+    """
+        attach database './import/AllPrintings.sqlite' as ap;
+        attach database './data/app_data.db' as ad;
+    """)
+    df_import = csr.read_sql(
     """
         select
-            c.uuid,
+            c.uuid as card_uuid,
             c.name,
             c.number,
-            c.setcode,
-            i.scryfallid,
+            c.setcode as set_code,
+            i.scryfallid as scryfall_id,
             c.side,
             c.language,
-            c.manacost,
-            c.manavalue,
+            c.manacost as mana_cost,
+            c.manavalue as mana_value,
             c.type,
             c.types,
             c.rarity,
@@ -250,12 +269,14 @@ def reset_table_cards():
         from
             ap.cards as c
             join ap.cardidentifiers as i on c.uuid = i.uuid
-    """).fetchall()
+    """) \
+        .assign(card_uuid=lambda df: df['card_uuid'].apply(lambda x:uuid.UUID(x))) \
+        .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
 
-    csr.execute(
-    """
-        create table cards_temp (
-            card_uuid guid,
+    create_table_ddl = lambda table: (
+    f"""
+        create table {table} (
+            card_uuid guid primary key,
             name text,
             number text,
             set_code text,
@@ -272,89 +293,22 @@ def reset_table_cards():
             toughness text
         )
     """)
-    for r in rows:
-        csr.execute(
-        """
-            insert into cards_temp (
-                card_uuid,
-                name,
-                number,
-                set_code,
-                scryfall_id,
-                side,
-                language,
-                mana_cost,
-                mana_value,
-                type,
-                types,
-                rarity,
-                colors,
-                power,
-                toughness
-            )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (uuid.UUID(r[0]), r[1], r[2], r[3], uuid.UUID(r[4]), r[5], r[6], r[7], 
-         r[8], r[9], r[10], r[11], r[12], r[13], r[14])
+    csr.execute(create_table_ddl('cards_temp'))
+    columns = csr.read_sql('select * from cards_temp').columns
+    csr.executemany(
+    f"""
+        insert into cards_temp ({', '.join(columns)})
+        values ({', '.join('? ' for _ in range(len(columns)))})
+    """,
+        df_import[columns].values
         )
-    csr.execute("attach database './data/app_data.db' as ad")
     csr.executescript(
-    """
+    f"""
         drop table if exists ad.cards;
-        create table ad.cards (
-            card_uuid guid primary key,
-            name text,
-            number text,
-            set_code text ,
-            scryfall_id guid,
-            side text,
-            language text,
-            mana_cost text,
-            mana_value text,
-            type text,
-            types text,
-            rarity text,
-            colors text,
-            power text,
-            toughness text,
-            foreign key (set_code) references sets(set_code) on delete set null on update cascade,
-            foreign key (language) references languages(language) on delete set null on update cascade
-        );
-        insert into ad.cards (
-            card_uuid,
-            name,
-            number,
-            set_code,
-            scryfall_id,
-            side,
-            language,
-            mana_cost,
-            mana_value,
-            type,
-            types,
-            rarity,
-            colors,
-            power,
-            toughness
-        )
-        select
-            card_uuid,
-            name,
-            number,
-            set_code,
-            scryfall_id,
-            side,
-            language,
-            mana_cost,
-            mana_value,
-            type,
-            types,
-            rarity,
-            colors,
-            power,
-            toughness
-        FROM
-            cards_temp
+        {create_table_ddl('ad.cards')};
+        insert into ad.cards ({', '.join(columns)})
+        select {', '.join(columns)}
+        from cards_temp
     """)
 
 def reset_table_foreign_data():
@@ -362,54 +316,47 @@ def reset_table_foreign_data():
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-    csr.execute("attach database './import/AllPrintings.sqlite' as ap")
-    rows = csr.execute(
+    csr.executescript(
+    """
+        attach database './import/AllPrintings.sqlite' as ap;
+        attach database './data/app_data.db' as ad;
+    """)
+    df = csr.read_sql(
     """
         select
-            uuid,
+            uuid as card_uuid,
             name,
-            language
+            case
+                when language = 'Portuguese (Brazil)'
+                    then 'Portuguese'
+                else language
+            end as language
         from ap.cardforeigndata
-    """).fetchall()
+    """) \
+        .assign(card_uuid=lambda df: df['card_uuid'].apply(lambda x:uuid.UUID(x)))
 
-    csr.execute(
-    """
-        create table foreign_data_temp (
+    create_table_ddl = lambda table: (
+    f"""
+        create table {table} (
             card_uuid guid,
-            foreign_name text,
+            name text,
             language text
         )
     """)
-    for r in rows:
-        csr.execute(
-        """
-            insert into foreign_data_temp (
-                card_uuid,
-                foreign_name,
-                language
-            )
-            values (?, ?, ?)
-        """, (uuid.UUID(r[0]), r[1], r[2])
-        )
-    csr.execute("attach database './data/app_data.db' as ad")
+    csr.execute(create_table_ddl('foreign_data_temp'))
+    columns = csr.read_sql('select * from foreign_data_temp').columns
+    csr.executemany(
+    f"""
+        insert into foreign_data_temp ({', '.join(columns)})
+        values ({', '.join('? ' for _ in range(len(columns)))})
+    """,
+        df[columns].values
+    )
     csr.executescript(
-    """
+    f"""
         drop table if exists ad.foreign_data;
-        create table ad.foreign_data (
-            card_uuid guid,
-            foreign_name text,
-            language text,
-            foreign key (card_uuid) references cards (card_uuid) on delete set null on update cascade
-        );
-        insert into ad.foreign_data (
-                card_uuid,
-                foreign_name,
-                language
-        )
-        select
-                card_uuid,
-                foreign_name,
-                language
-        FROM
-            foreign_data_temp
+        {create_table_ddl('ad.foreign_data')};
+        insert into ad.foreign_data ({', '.join(columns)})
+        select {', '.join(columns)}
+        from foreign_data_temp
     """)

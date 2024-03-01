@@ -26,7 +26,7 @@ st.markdown(
 def main():
 
 	# st.title('Magic explorer') #TODO return after multi-page version
-	menu = ['Init', 'Cards', 'Import', 'Delver Lens', 'Players', 'Collections', 'Decks']
+	menu = ['Init', 'Cards', 'Import', 'Delver Lens import', 'Players', 'Collections', 'Decks']
 	choice = st.sidebar.selectbox('Menu',menu)
 	if choice == 'Init':
 		page_initialization.get_content()
@@ -36,7 +36,7 @@ def main():
 		page_collections.get_content()
 	if choice == 'Import':
 		page_import.get_content()
-	if choice == 'Delver':
+	if choice == 'Delver Lens import':
 		page_import_delver_lens.get_content()
 main()
 

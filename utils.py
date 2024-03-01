@@ -6,6 +6,7 @@ import json
 import streamlit as st
 import datetime
 import time
+import os
 from typing import List, Tuple
 import extra_streamlit_components as stx
 
@@ -141,7 +142,7 @@ def search_set_by_name(card_name: str, card_lang: str):
                     language
                 from foreign_data
                 where 
-                    foreign_name = '{card_name}'
+                    name = '{card_name}'
                     and language = '{card_lang}'
             ) as f
                 on c.card_uuid = f.card_uuid
@@ -335,7 +336,7 @@ def delete_record(entity: str, name: str):
             f'{entity.capitalize()} {name} was deleted!'
         )
 
-def update_table(entity, default_value, id, column, value):
+def update_table(entity, id, column, value, default_value=None, db_path='user_data.db'):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     if isinstance(value, datetime.date):
@@ -343,7 +344,7 @@ def update_table(entity, default_value, id, column, value):
                 value.year, value.month, value.day
             ).timestamp()
         )
-    csr = Db('user_data.db')
+    csr = Db(db_path)
     if column == f'is_default_{entity}':
         set_default_value(entity, default_value, csr)
     else:
@@ -542,17 +543,124 @@ def show_tab_bar(tabs: list):
     tab_bar = stx.tab_bar(data=data, default=tabs[0])
     return tab_bar
 
-def get_delver_lists_names():
-    csr = Db('../import/2022_Jun_23_13-17_exported.dlens')
+def save_to_temp_dir(*args):
+    for root, _, files in os.walk('./data/temp'):
+        for file in files:
+            os.remove(os.path.join(root, file))
+    db_paths = []
+    for db in args:
+        path = os.path.join('./data/temp', db.name)
+        db_paths.append(path)
+        with open(path, 'wb') as file:
+            file.write(db.read())
+    return db_paths
+
+def import_delver_lens_cards(dlens_db_path, ut_db_path):
+    sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
+    sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
+    csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
+    csr.executescript(
+    f"""
+        attach database '{dlens_db_path}' as exp_db;
+        attach database '{ut_db_path}' as apk_db;
+        attach database './data/temp/temp_db.db' as temp_db;
+    """)
+    df_import = csr.read_sql(
+    """
+        select
+            case
+                when apk.scryfall_id is NULL and cards.card = 62663
+                    then '320fdf89-e158-41c5-b0bf-fee9dec36a75'
+                else apk.scryfall_id
+            end as scryfall_id,
+            case
+                when cards.language <> ''
+                    then cards.language
+                else 'English'
+            end as language,
+            case
+                when cards.condition <> ''
+                    then cards.condition
+                else NULL
+            end as condition_name,
+            cards.foil,
+            cards.general as is_commander,
+            cards.quantity as qnty,
+            lists._id as import_list_id,
+            lists.name as name,
+            case
+                when lists.category = 1
+                    then 'Collection'
+                when lists.category = 2
+                    then 'Deck'
+                when lists.category = 3
+                    then 'Wishlist'
+            end as type,
+            lists.creation as creation_date
+        from exp_db.cards as cards
+        left join exp_db.lists as lists
+            on cards.list = lists._id
+        left join apk_db.cards as apk
+            on cards.card = apk._id
+    """) \
+        .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
+    create_table_ddl = lambda table:(
+    f"""
+        create table {table} (
+            scryfall_id guid,
+            language text,
+            condition_name text,
+            foil integer,
+            is_commander integer,
+            qnty integer,
+            import_list_id integer,
+            name text,
+            type integer,
+            creation_date integer
+        )
+    """)
+    csr.execute(create_table_ddl('import_cards_temp'))
+    columns = csr.read_sql('select * from import_cards_temp').columns
+    csr.executemany(
+        f"""
+        insert into import_cards_temp ({', '.join(columns)})
+        values ({', '.join('? ' for _ in range(len(columns)))})
+        """,
+        df_import[columns].values
+    )
+    csr.executescript(
+    f"""
+        drop table if exists temp_db.import_lists;
+        create table temp_db.import_lists (
+            import_list_id integer,
+            name text,
+            type integer,
+            creation_date integer
+        );
+        create unique index temp_db.idx_list_content
+        on import_lists (name, type);
+        insert into temp_db.import_lists ({', '.join(columns[-4:])})
+        select distinct {', '.join(columns[-4:])}
+        from import_cards_temp;
+        drop table if exists temp_db.import_cards;
+        {create_table_ddl('temp_db.import_cards')};
+        insert into temp_db.import_cards ({', '.join(columns[:-3])})
+        select {', '.join(columns[:-3])}
+        from import_cards_temp;
+    """)
+def get_import_names():
+    csr = Db('temp/temp_db.db', detect_types=sqlite3.PARSE_DECLTYPES)
     result = csr.read_sql(
     """
     select
-        "_id" as delver_list_id,
-        category,
+        import_list_id,
         name,
-        creation
-    from lists
+        type,
+        creation_date
+    from import_lists
+    order by import_list_id
     """
     )
+    result['create_ns'] = time.time_ns()
     return result
 

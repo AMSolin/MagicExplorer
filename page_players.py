@@ -17,7 +17,9 @@ def get_content():
                 player = players_table.iloc[ix].loc['name']
                 player_id = players_table.iloc[ix].loc['player_id']
                 try:
-                    update_table('player', player, player_id, col, val)
+                    update_table(
+                        'player', player_id, col, val, default_value=player
+                    )
                 except sqlite3.IntegrityError:
                      table_container.error(f'Player {val} already exist!')
         _ = table_container.data_editor(

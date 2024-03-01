@@ -1,60 +1,78 @@
 import streamlit as st
-import pandas as pd
-import time
 from utils import *
-from import_utils import *
 
 def get_content():
-    if 'v_delver_lists' not in st.session_state:
-        df_delver_lists = get_delver_lists_names()
-        df_delver_lists = df_delver_lists \
-            .assign(selected=True) \
-            .assign(open=False) \
-            .assign(type=lambda df: df.category.replace(
-                {1: 'List', 2: 'Deck'}
-            ))
-        st.session_state.s_selected_lists = df_delver_lists['selected']
-    else:
-        df_delver_lists = st.session_state.df_delver_lists \
-            .assign(open=False) \
-            .assign(selected=st.session_state.s_selected_lists)
-    if 'current_d_list_id' in st.session_state:
-        mask = (df_delver_lists['delver_list_id'] == st.session_state.current_d_list_id)
-        df_delver_lists.loc[mask,'open'] = True
     with st.sidebar:
-        def list_callback():
-            changes = [
-                (ix, [(col, val) for col, val in pair.items()])
-                for ix, pair in st.session_state.v_delver_lists['edited_rows'].items()
-            ]
-            ix, [[col, val]]= changes[0]
-            if col == 'open':
-                if val is True:
-                    st.session_state.current_d_list_id = df_delver_lists \
-                        .iloc[ix].loc['delver_list_id']
+        if 's_selected_lists' not in st.session_state:
+            dlens_db = st.file_uploader(
+                'Choose dlens file:',
+                key='v_dlens_db_uploader',
+                type='dlens'
+                )
+            ut_db = st.file_uploader(
+                'Choose ut.db file:',
+                key='v_ut_db_uploader',
+                type='db'
+                )
+            button_state = False if dlens_db and ut_db else True
+            submitted = st.button('Import', disabled=button_state)
+            if submitted and dlens_db and ut_db:
+                dlens_db_path, ut_db_path = save_to_temp_dir(dlens_db, ut_db)
+                import_delver_lens_cards(dlens_db_path, ut_db_path)
+                st.session_state.s_selected_lists = True
+                st.rerun()
+        else:
+            discard_button = st.button('Discard import')
+            df_delver_lists = get_import_names() \
+                .assign(selected=st.session_state.s_selected_lists) \
+                .assign(open=False)
+            st.session_state.s_selected_lists = df_delver_lists['selected'].copy()
+            if 'current_list_id' not in st.session_state:
+                st.session_state.current_list_id = df_delver_lists.iloc[0].loc['import_list_id']
+            mask_list = df_delver_lists['import_list_id'] == st.session_state.current_list_id
+            df_delver_lists.loc[mask_list, 'open'] = True
+            if discard_button:
+                del st.session_state.s_selected_lists
+                st.rerun()
+
+            def list_callback():
+                changes = [
+                    (ix, [(col, val) for col, val in pair.items()])
+                    for ix, pair in st.session_state.v_delver_lists['edited_rows'].items()
+                ]
+                ix, [[col, val]]= changes[0]
+                if col == 'selected':
+                    st.session_state.s_selected_lists \
+                        .iloc[ix] = val
+                elif col == 'open':
+                    st.session_state.current_list_id = df_delver_lists \
+                        .iloc[ix].loc['import_list_id']
                 else:
-                    del st.session_state.current_d_list_id
-            if col == 'selected':
-                st.session_state.s_selected_lists \
-                    .iloc[ix] = val
-        
-        st.session_state.df_delver_lists = st.data_editor(
-            df_delver_lists,
-            key='v_delver_lists',
-            hide_index=True,
-            column_config={
-                'selected': st.column_config.CheckboxColumn("✔",),
-                'delver_list_id': None,
-                'category': None,
-                'type': st.column_config.SelectboxColumn(
-                    'Type', options=['Deck', 'Coll.'],
-                     required=True,  width='small'
-                ),
-                'name': 'Name',
-                'creation': None,
-                'open': st.column_config.CheckboxColumn('Open'),
-            },
-            column_order=['selected', 'name', 'type', 'open'],
-            disabled=['name', 'type'],
-            on_change=list_callback
-        )
+                    list_id = df_delver_lists.iloc[ix].loc['import_list_id']
+                    try:
+                        update_table('import_list', list_id, col, val, db_path='temp/temp_db.db')
+                    except sqlite3.IntegrityError:
+                        if col == 'type':
+                            type = val
+                            name = df_delver_lists.iloc[ix].loc['name']
+                        else:
+                            type = df_delver_lists.iloc[ix].loc['type']
+                            name = val
+                        table_container.error(f'{type} "{name}" already exist!')
+            table_container = st.container()
+            st.session_state.df_delver_lists = table_container.data_editor(
+                df_delver_lists,
+                key='v_delver_lists',
+                hide_index=True,
+                column_config={
+                    'selected': st.column_config.CheckboxColumn("✔"),
+                    'type': st.column_config.SelectboxColumn(
+                        'Type', options=['Collection', 'Deck', 'Wishlist'],
+                        required=True,  width='small'
+                    ),
+                    'name': st.column_config.TextColumn('Name', width='medium'),
+                    'open': st.column_config.CheckboxColumn('Open'),
+                },
+                column_order=['selected', 'name', 'type', 'open'],
+                on_change=list_callback
+            )
