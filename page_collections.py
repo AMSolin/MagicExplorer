@@ -87,7 +87,7 @@ def get_content():
     with list_side:
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
         card_id_cols = [
-            'list_id', 'card_uuid', 'condition_id', 'foil', 'language',
+            'list_id', 'card_uuid', 'condition_name', 'foil', 'language',
             'qnty',
             'set_code', 'card_number', 'language_code'
         ]
@@ -123,7 +123,6 @@ def get_content():
             column_config={
                 'list_id': None,
                 'card_uuid': None,
-                'condition_id': None,
                 'language': None,
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1

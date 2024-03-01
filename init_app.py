@@ -48,17 +48,16 @@ def reset_table_card_condition():
     """
         drop table if exists card_condition;
         create table card_condition (
-            condition_id integer primary key,
-            code text not null unique,
+            code text not null primary key,
             name text not null unique
         );
-        insert into card_condition (condition_id, code, name)
+        insert into card_condition (code, name)
         values 
-            (1, 'NM', 'Near Mint'), 
-            (2, 'SP', 'Slightly Played'),
-            (3, 'MP', 'Moderately Played'),
-            (4, 'HP', 'Heavily Played'),
-            (5, 'D', 'Damaged');
+            ('NM', 'Near Mint'), 
+            ('SP', 'Slightly Played'),
+            ('MP', 'Moderately Played'),
+            ('HP', 'Heavily Played'),
+            ('D', 'Damaged');
     """)
 
 def reset_table_deck_types():
@@ -104,7 +103,7 @@ def reset_table_list_content():
         create table list_content (
             list_id integer,
             card_uuid guid,
-            condition_id integer,
+            condition_code text,
             foil integer,
             language text,
             qnty integer,
@@ -113,7 +112,7 @@ def reset_table_list_content():
         );
         create unique index idx_list_content
         on list_content (
-            list_id, card_uuid, condition_id, foil, language
+            list_id, card_uuid, condition_code, foil, language
         );
     """)
 
@@ -147,7 +146,7 @@ def reset_table_deck_content():
         create table deck_content (
             deck_id integer,
             card_uuid guid,
-            condition_id integer,
+            condition_code text,
             foil integer,
             language text,
             deck_type_id integer,
@@ -157,7 +156,7 @@ def reset_table_deck_content():
         );
         create unique index idx_deck_content
         on deck_content (
-            deck_id, card_uuid, condition_id, foil, language, deck_type_id
+            deck_id, card_uuid, condition_code, foil, language, deck_type_id
         );
     """)
 

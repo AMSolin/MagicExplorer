@@ -82,7 +82,7 @@ def get_content():
         df_deck_content = get_deck_content(st.session_state.current_deck_id) \
             .assign(open=False)
         card_cols = [
-            'deck_id', 'card_uuid', 'condition_id', 'foil', 'language', 'deck_type_id'
+            'deck_id', 'card_uuid', 'condition_code', 'foil', 'language', 'deck_type_id'
             'qnty',
             'set_code', 'card_number', 'language_code'
         ]
@@ -121,7 +121,6 @@ def get_content():
                 'deck_id': None,
                 'deck_type_id': 'deck_type',
                 'card_uuid': None,
-                'condition_id': None,
                 'language': None,
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1

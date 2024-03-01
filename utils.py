@@ -236,7 +236,7 @@ def get_list_content(list_id):
         select
             lc.list_id,
             lc.card_uuid,
-            lc.condition_id,
+            lc.condition_code,
             lc.language,
             lc.qnty,
             ca.name, --#TODO change name according language
@@ -247,13 +247,10 @@ def get_list_content(list_id):
             --se.keyrune_code, #TODO add keyrune symbol
             ca.rarity,
             ca.mana_cost,
-            lc.foil,
-            co.code as condition_code
+            lc.foil
         from list_content as lc
         left join cards as ca
             on lc.card_uuid = ca.card_uuid
-        left join card_condition as co
-            on lc.condition_id = co.condition_id
         left join sets as se
             on ca.set_code = se.set_code
         left join languages as la
@@ -275,7 +272,7 @@ def get_deck_content(deck_id):
             dc.deck_id,
             dc.deck_type_id,
             dc.card_uuid,
-            dc.condition_id,
+            dc.condition_code,
             dc.language,
             dc.qnty,
             ca.name, --#TODO change name according language
@@ -286,13 +283,10 @@ def get_deck_content(deck_id):
             --se.keyrune_code, #TODO add keyrune symbol
             ca.rarity,
             ca.mana_cost,
-            dc.foil,
-            co.code as condition_code
+            dc.foil
         from deck_content as dc
         left join cards as ca
             on dc.card_uuid = ca.card_uuid
-        left join card_condition as co
-            on dc.condition_id = co.condition_id
         left join sets as se
             on ca.set_code = se.set_code
         left join languages as la
@@ -407,7 +401,7 @@ def update_table_content(entity, card_id, column, value):
             where
                 list_id = {card_dict['list_id']}
                 and card_uuid = X'{card_dict['card_uuid'].hex()}'
-                and condition_id = {card_dict['condition_id']}
+                and condition_code = {card_dict['condition_code']}
                 and foil = {card_dict['foil']}
                 and language = '{card_dict['language']}'
         """)
@@ -425,33 +419,16 @@ def update_table_content(entity, card_id, column, value):
         csr.execute(
         f"""
             insert into {entity}_content (
-                list_id, card_uuid, condition_id, foil, language, qnty
+                list_id, card_uuid, condition_code, foil, language, qnty
             ) 
             values(?, ?, ?, ?, ?, ?)
             on conflict (
-                list_id, card_uuid, condition_id, foil, language
+                list_id, card_uuid, condition_code, foil, language
             ) do update set qnty = {add_method}
         """, 
-        (card_dict['list_id'], (card_dict['card_uuid']), card_dict['condition_id'],
+        (card_dict['list_id'], (card_dict['card_uuid']), card_dict['condition_code'],
             card_dict['foil'], card_dict['language'], card_dict['qnty'])
         )
-
-def columns_conversation(df):
-    csr = Db('user_data.db')
-    for col in df.columns:
-        if col == 'Foil':
-            df[col] = df[col].astype(int)
-        elif col == 'Condition':
-            df_conv = csr.read_sql(
-                'select condition_id, code from card_condition'
-            )
-        elif col == 'Deck type':
-            df_conv = csr.read_sql(
-                'select deck_type_id, name from deck_types'
-            )
-        dict_conv = {row[1]: row[0] for row in df_conv.values}
-        df[col] = df[col].replace(dict_conv).astype(int)
-    return df
 
 def import_cards(
     df, list_action, list_name, deck_action, deck_name
@@ -515,7 +492,7 @@ def import_cards(
             insert into list_content (
                 list_id,
                 card_uuid,
-                condition_id,
+                condition_code,
                 foil,
                 language,
                 qnty
@@ -523,7 +500,7 @@ def import_cards(
             select
                 li.list_id,
                 ca.card_uuid,
-                co.condition_id,
+                ci.condition_code,
                 ci.foil,
                 la.language,
                 ci.qnty
@@ -533,12 +510,10 @@ def import_cards(
             left join ad.cards as ca
                 on ci.set_code = ca.set_code
                 and ci.number = ca.number
-            left join card_condition as co
-                on ci.condition_code = co.code
             left join languages as la
                 on ci.language_code = la.language_code
             on conflict (
-                list_id, card_uuid, condition_id,
+                list_id, card_uuid, condition_code,
                 foil, language
             ) do update set
                 qnty = qnty + excluded.qnty
@@ -553,7 +528,7 @@ def import_cards(
             select
                 de.deck_id,
                 ca.card_uuid,
-                co.condition_id,
+                ci.condition_code,
                 dt.deck_type_id,
                 ci.qnty,
                 ci.foil,
@@ -562,10 +537,8 @@ def import_cards(
             left join decks as de
                 on ci.deck_name = de.name
             left join ad.cards as ca
-                on ci.set_code = ca.set_code
-                and ci.number = ca.number
-            left join card_condition as co
-                on ci.condition_code = co.code
+                on ci.set_code = ca.set_code 
+                    and ci.number = ca.number
             left join deck_types as dt
                 on ci.deck_type_name = dt.name
             left join languages as la
