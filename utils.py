@@ -666,6 +666,7 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
             import_list_id integer,
             name text,
             type integer,
+            selected integer default 1,
             creation_date integer
         );
         create unique index temp_db.idx_list_content
@@ -693,10 +694,11 @@ def import_delver_lens_cards(dlens_db_path, ut_db_path):
         ;
     """)
 def get_import_names():
-    csr = Db('temp/temp_db.db', detect_types=sqlite3.PARSE_DECLTYPES)
+    csr = Db('temp/temp_db.db')
     result = csr.read_sql(
     """
     select
+        selected,
         import_list_id,
         name,
         type,
@@ -708,3 +710,42 @@ def get_import_names():
     result['create_ns'] = time.time_ns()
     return result
 
+def check_for_duplicates():
+    csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/user_data.db' as ud")
+    msg = ''
+    result = csr.execute(
+    """
+    select
+        name
+    from import_lists
+    where
+        type = 'Collection'
+        and selected = 1
+    intersect
+    select
+        name
+    from ud.lists
+    """
+    ).fetchall()
+    for name in result:
+        msg += f'Collection {name[0]} already exists!  \n'
+    
+    result = csr.execute(
+    """
+    select
+        name
+    from import_lists
+    where
+        type = 'Deck'
+        and selected = 1
+    intersect
+    select
+        name
+    from ud.decks
+    """
+    ).fetchall()
+    for name in result:
+        msg += f'Deck {name[0]} already exists!  \n'
+    msg += 'Import aborted!' if len(msg) > 0 else ''
+    return msg

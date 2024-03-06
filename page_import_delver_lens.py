@@ -22,18 +22,12 @@ def get_content():
                 st.session_state.s_selected_lists = True
                 st.rerun()
         else:
-            discard_button = st.button('Discard import')
             df_delver_lists = get_import_names() \
-                .assign(selected=st.session_state.s_selected_lists) \
                 .assign(open=False)
-            st.session_state.s_selected_lists = df_delver_lists['selected'].copy()
             if 'current_list_id' not in st.session_state:
                 st.session_state.current_list_id = df_delver_lists.iloc[0].loc['import_list_id']
             mask_list = df_delver_lists['import_list_id'] == st.session_state.current_list_id
             df_delver_lists.loc[mask_list, 'open'] = True
-            if discard_button:
-                del st.session_state.s_selected_lists
-                st.rerun()
 
             def list_callback():
                 changes = [
@@ -41,16 +35,16 @@ def get_content():
                     for ix, pair in st.session_state.v_delver_lists['edited_rows'].items()
                 ]
                 ix, [[col, val]]= changes[0]
-                if col == 'selected':
-                    st.session_state.s_selected_lists \
-                        .iloc[ix] = val
-                elif col == 'open':
+                if col == 'open':
                     st.session_state.current_list_id = df_delver_lists \
                         .iloc[ix].loc['import_list_id']
                 else:
                     list_id = df_delver_lists.iloc[ix].loc['import_list_id']
                     try:
-                        update_table('import_list', list_id, col, val, db_path='temp/temp_db.db')
+                        val = int(val) if col == 'selected' else val
+                        update_table(
+                            'import_list', list_id, col, val, db_path='temp/temp_db.db'
+                        )
                     except sqlite3.IntegrityError:
                         if col == 'type':
                             type = val
@@ -76,3 +70,13 @@ def get_content():
                 column_order=['selected', 'name', 'type', 'open'],
                 on_change=list_callback
             )
+            col1, col2 = st.columns(2)
+            discard_button = col2.button('Discard import')
+            if discard_button:
+                del st.session_state.s_selected_lists
+                st.rerun()
+            import_button = col1.button('Import')
+            if import_button:
+                msg = check_for_duplicates()
+                if len(msg) > 0:
+                    table_container.error(msg)
