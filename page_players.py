@@ -50,7 +50,7 @@ def get_content():
                 default_flag = st.checkbox('Set as default player')
                 if submitted and new_player.strip() != '':
                     try:
-                        add_new_record('player', new_player, default_flag)
+                        add_new_record('player', new_player, is_default=default_flag)
                         st.rerun()
                     except sqlite3.IntegrityError:
                             st.error(f'Player {new_player} already exist!')

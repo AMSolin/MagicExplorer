@@ -18,7 +18,7 @@ def get_content():
             submitted = st.button('Import', disabled=button_state)
             if submitted and dlens_db and ut_db:
                 dlens_db_path, ut_db_path = save_to_temp_dir(dlens_db, ut_db)
-                import_delver_lens_cards(dlens_db_path, ut_db_path)
+                temp_import_delver_lens_cards(dlens_db_path, ut_db_path)
                 st.session_state.s_selected_lists = True
                 st.rerun()
         else:
@@ -78,5 +78,10 @@ def get_content():
             import_button = col1.button('Import')
             if import_button:
                 msg = check_for_duplicates()
+                #TODO check for register
                 if len(msg) > 0:
                     table_container.error(msg)
+                else:
+                    import_delver_lens_cards()
+                    #BUG check creation_date
+                    #TODO add toasts

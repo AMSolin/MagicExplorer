@@ -63,7 +63,7 @@ def get_content():
                 default_flag = st.checkbox('Set as default collection')
                 if submitted and new_list.strip() != '':
                     try:
-                        add_new_record('list', new_list, default_flag)
+                        add_new_record('list', new_list, is_default=default_flag)
                         st.experimental_rerun()
                     except sqlite3.IntegrityError:
                         st.error(f'Collection {new_list} already exist!')

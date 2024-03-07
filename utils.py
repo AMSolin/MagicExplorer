@@ -316,8 +316,11 @@ def set_default_value(entity, name: str, cursor=None):
             else 0 end
     """)
 
-def add_new_record(entity: str, name: str, is_default: bool=False):
+def add_new_record(
+        entity: str, name: str, creation_date: int=None, is_default: bool=False
+    ):
     csr = Db('user_data.db')
+    creation_date = creation_date if creation_date else r"strftime('%s','now')"
     if entity == 'player':
         csr.execute(
         f"""
@@ -331,14 +334,14 @@ def add_new_record(entity: str, name: str, is_default: bool=False):
                 name, creation_date, is_default_list
             )
             values (
-                '{name}', strftime('%s','now'), {int(is_default)}
+                '{name}', {creation_date}, {int(is_default)}
             )
         """)
     elif entity == 'deck':
         csr.execute(
         f"""
             insert into decks (name, creation_date)
-            values ('{name}', strftime('%s','now'))
+            values ('{name}', {creation_date})
         """)
     else:
         raise ValueError(f'Unknown {entity} entity!')
@@ -573,7 +576,7 @@ def save_to_temp_dir(*args):
             file.write(db.read())
     return db_paths
 
-def import_delver_lens_cards(dlens_db_path, ut_db_path):
+def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
@@ -716,36 +719,47 @@ def check_for_duplicates():
     msg = ''
     result = csr.execute(
     """
-    select
-        name
+    select name
     from import_lists
     where
         type = 'Collection'
         and selected = 1
     intersect
-    select
-        name
+    select name
     from ud.lists
     """
     ).fetchall()
-    for name in result:
-        msg += f'Collection {name[0]} already exists!  \n'
+    for row in result:
+        msg += f'Collection {row[0]} already exists!  \n'
     
     result = csr.execute(
     """
-    select
-        name
+    select name
     from import_lists
     where
         type = 'Deck'
         and selected = 1
     intersect
-    select
-        name
+    select name
     from ud.decks
     """
     ).fetchall()
-    for name in result:
-        msg += f'Deck {name[0]} already exists!  \n'
+    for row in result:
+        msg += f'Deck {row[0]} already exists!  \n'
     msg += 'Import aborted!' if len(msg) > 0 else ''
     return msg
+
+def import_delver_lens_cards():
+    csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/user_data.db' as ud")
+    result = csr.execute(
+    """
+    select name, creation_date
+    from import_lists
+    where
+        type = 'Collection'
+        and selected = 1
+    """
+    ).fetchall()
+    for name, creation_date in result:
+       add_new_record('list', name, creation_date=creation_date)
