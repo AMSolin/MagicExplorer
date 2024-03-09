@@ -317,9 +317,10 @@ def set_default_value(entity, name: str, cursor=None):
     """)
 
 def add_new_record(
-        entity: str, name: str, creation_date: int=None, is_default: bool=False
+        entity: str, name: str, creation_date: int=None, is_default: bool=False,
+        cursor: Db=None
     ):
-    csr = Db('user_data.db')
+    csr = cursor if cursor else Db('user_data.db')
     creation_date = creation_date if creation_date else r"strftime('%s','now')"
     if entity == 'player':
         csr.execute(
@@ -433,7 +434,7 @@ def update_table_content(entity, card_id, column, value):
             card_dict['foil'], card_dict['language'], card_dict['qnty'])
         )
 
-def import_cards(
+def manual_import_cards(
     df, list_action, list_name, deck_action, deck_name
 ):
     df = df.assign(list_name=list_name, deck_name=deck_name)
@@ -472,23 +473,9 @@ def import_cards(
         ]].values
     )
     if list_action == 'New':
-        csr.execute(
-        f"""
-            insert into lists (name, creation_date)
-            values ('{list_name}', strftime('%s','now'))
-        """)
-        st.session_state.last_actions.append(
-            f'List {list_name} was added!'
-        )
+        add_new_record('list', list_name, cursor=csr)
     if deck_action == 'New':
-        csr.execute(
-        f"""
-            insert into decks (name, creation_date)
-            values ('{deck_name}', strftime('%s','now'))
-        """)
-        st.session_state.last_actions.append(
-            f'Deck {deck_name} was added!'
-        )
+        add_new_record('deck', deck_name, cursor=csr)
     if list_action != 'Skip':
         csr.execute(
         f"""
@@ -626,7 +613,7 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
                 when lists.category = 3
                     then 'Wishlist'
             end as type,
-            lists.creation as creation_date
+            cast(substr(lists.creation, 1, 10) as integer) as creation_date
         from exp_db.cards as cards
         left join exp_db.lists as lists
             on cards.list = lists._id
@@ -715,8 +702,27 @@ def get_import_names():
 
 def check_for_duplicates():
     csr = Db('temp/temp_db.db')
-    csr.execute("attach database './data/user_data.db' as ud")
     msg = ''
+    result = csr.execute(
+    """
+    select
+        count(*) as cnt_dups,
+        type,
+        name
+    from import_lists
+    group by
+        type,
+        name
+    having cnt_dups > 1
+    """
+    ).fetchall()
+    for row in result:
+        msg += f'Found {row[0]} {row[1]}s with same name: {row[2]}  \n'
+    if len(msg) > 0:
+        msg += 'Rename theys before proceed. Import aborted!'
+        return msg
+    
+    csr.execute("attach database './data/user_data.db' as ud")
     result = csr.execute(
     """
     select name

@@ -78,10 +78,8 @@ def get_content():
             import_button = col1.button('Import')
             if import_button:
                 msg = check_for_duplicates()
-                #TODO check for register
                 if len(msg) > 0:
                     table_container.error(msg)
                 else:
                     import_delver_lens_cards()
-                    #BUG check creation_date
-                    #TODO add toasts
+                display_toasts()

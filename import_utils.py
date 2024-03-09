@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import display_toasts, get_lists, get_decks, import_cards
+from utils import display_toasts, get_lists, get_decks, manual_import_cards
 
 def init_session_variables():
     if 'selection_table' not in st.session_state:
@@ -68,7 +68,7 @@ def export_section():
                     (deck_name in get_decks()['name'].values):
                     st.error(f'Deck {deck_name} already exist!' + err_msg)
                 else:
-                    import_cards(
+                    manual_import_cards(
                         st.session_state.selection_table,
                         list_action, list_name, deck_action, deck_name
                     )
