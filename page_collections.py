@@ -87,7 +87,7 @@ def get_content():
     with list_side:
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
         card_id_cols = [
-            'list_id', 'card_uuid', 'condition_name', 'foil', 'language',
+            'list_id', 'card_uuid', 'condition_code', 'foil', 'language',
             'qnty',
             'set_code', 'card_number', 'language_code'
         ]
@@ -119,6 +119,7 @@ def get_content():
         _ = st.data_editor(
             df_list_content,
             key='v_list_content',
+            height=843,
             hide_index=True,
             column_config={
                 'list_id': None,

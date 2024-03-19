@@ -312,6 +312,55 @@ def reset_table_cards():
         from cards_temp
     """)
 
+def reset_table_tokens():
+    #NOTE https://stackoverflow.com/questions/50376345/python-insert-uuid-value-in-sqlite3
+    sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
+    sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
+    csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
+    csr.executescript(
+    """
+        attach database './import/AllPrintings.sqlite' as ap;
+        attach database './data/app_data.db' as ad;
+    """)
+    df_import = csr.read_sql(
+    """
+        select
+            t.uuid as token_uuid,
+            i.scryfallid as scryfall_id,
+            t.name
+        from
+            ap.tokens as t
+            join ap.tokenidentifiers as i on t.uuid = i.uuid
+    """) \
+        .assign(token_uuid=lambda df: df['token_uuid'].apply(lambda x:uuid.UUID(x))) \
+        .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
+
+    create_table_ddl = lambda table: (
+    f"""
+        create table {table} (
+            token_uuid guid primary key,
+            scryfall_id guid,
+            name text
+        )
+    """)
+    csr.execute(create_table_ddl('tokens_temp'))
+    columns = csr.read_sql('select * from tokens_temp').columns
+    csr.executemany(
+    f"""
+        insert into tokens_temp ({', '.join(columns)})
+        values ({', '.join('? ' for _ in range(len(columns)))})
+    """,
+        df_import[columns].values
+        )
+    csr.executescript(
+    f"""
+        drop table if exists ad.tokens;
+        {create_table_ddl('ad.tokens')};
+        insert into ad.tokens ({', '.join(columns)})
+        select {', '.join(columns)}
+        from tokens_temp
+    """)
+
 def reset_table_foreign_data():
     #NOTE https://stackoverflow.com/questions/50376345/python-insert-uuid-value-in-sqlite3
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)

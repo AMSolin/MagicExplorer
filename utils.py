@@ -434,7 +434,7 @@ def update_table_content(entity, card_id, column, value):
             card_dict['foil'], card_dict['language'], card_dict['qnty'])
         )
 
-def manual_import_cards(
+def manual_import_cards_to_user_data(
     df, list_action, list_name, deck_action, deck_name
 ):
     df = df.assign(list_name=list_name, deck_name=deck_name)
@@ -621,9 +621,9 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             on cards.card = apk._id
     """) \
         .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
-    create_table_ddl = lambda table:(
+    csr.execute(
     f"""
-        create table {table} (
+        create table import_cards_temp (
             scryfall_id guid,
             language text,
             condition_name text,
@@ -637,36 +637,32 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             creation_date integer
         )
     """)
-    csr.execute(create_table_ddl('import_cards_temp'))
-    columns = csr.read_sql('select * from import_cards_temp').columns
+    columns_temp = csr.read_sql('select * from import_cards_temp').columns
     csr.executemany(
         f"""
-        insert into import_cards_temp ({', '.join(columns)})
-        values ({', '.join('? ' for _ in range(len(columns)))})
+        insert into import_cards_temp ({', '.join(columns_temp)})
+        values ({', '.join('? ' for _ in range(len(columns_temp)))})
         """,
-        df_import[columns].values
+        df_import[columns_temp].values
     )
-    renamed_ddl = create_table_ddl('temp_db.import_cards') \
-        .replace('scryfall_id', 'card_uuid') \
-        .replace('condition_name', 'condition_code')
     csr.executescript(
     f"""
-        drop table if exists temp_db.import_lists;
-        create table temp_db.import_lists (
-            import_list_id integer,
-            name text,
-            type integer,
-            selected integer default 1,
-            creation_date integer
-        );
-        create unique index temp_db.idx_list_content
-        on import_lists (name, type);
-        insert into temp_db.import_lists ({', '.join(columns[-4:])})
-        select distinct {', '.join(columns[-4:])}
-        from import_cards_temp;
         drop table if exists temp_db.import_cards;
-        {create_table_ddl('temp_db.import_cards')};
-        insert into temp_db.import_cards ({', '.join(columns[:-3])})
+        create table temp_db.import_cards (
+            card_uuid guid,
+            language text,
+            condition_code text,
+            foil integer,
+            is_commander integer,
+            deck_type_name text,
+            qnty integer,
+            import_list_id integer
+        );
+    """)
+    columns = csr.read_sql('select * from import_cards').columns
+    csr.executescript(
+    f"""
+        insert into temp_db.import_cards ({', '.join(columns)})
         select 
             ca.card_uuid,
             t.language,
@@ -674,15 +670,75 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             t.foil,
             t.is_commander,
             t.deck_type_name,
-            t.qnty,
+            sum(t.qnty) as qnty,
             t.import_list_id
         from import_cards_temp as t
         left join app_db.cards as ca
             on t.scryfall_id = ca.scryfall_id
+        left join app_db.tokens as tk
+            on t.scryfall_id = tk.scryfall_id
         left join app_db.card_condition as cc
             on t.condition_name = cc.name
+        where
+           tk.scryfall_id is Null
+           and coalesce(ca.side, 'a') = 'a'
+        group by
+            ca.card_uuid, t.language, condition_code, t.foil, t.is_commander,
+            t.deck_type_name, t.import_list_id
         ;
+        drop table if exists temp_db.import_tokens;
+        create table temp_db.import_tokens (
+            type text,
+            list_name text,
+            token_name text,
+            qnty integer
+        );
+        insert into temp_db.import_tokens (type, list_name, token_name, qnty)
+        select
+            t.type,
+            t.name,
+            tk.name,
+            sum(t.qnty) as qnty
+        from import_cards_temp as t
+        inner join app_db.tokens as tk
+            on t.scryfall_id = tk.scryfall_id
+        group by
+            t.type, t.name, tk.name
+        ;
+        drop table if exists temp_db.import_lists;
+        create table temp_db.import_lists (
+            import_list_id integer,
+            name text,
+            type text,
+            selected integer default 1,
+            creation_date integer
+        );
+        create unique index temp_db.idx_list_content
+        on import_lists (name, type);
+        insert into temp_db.import_lists ({', '.join(columns_temp[-4:])})
+        select distinct {', '.join(columns_temp[-4:])}
+        from import_cards_temp;
     """)
+
+def check_for_tokens():
+    csr = Db('temp/temp_db.db')
+    result = csr.execute(
+    """
+    select
+        type,
+        list_name,
+        token_name,
+        qnty
+    from import_tokens
+    order by list_name
+    """
+    ).fetchall()
+    if len(result) > 0:
+        for row in result:
+            st.session_state.last_actions.append(
+            f'Skipped {row[3]} token {row[2]} in {row[1]} {(row[0]).lower()}'
+        )
+
 def get_import_names():
     csr = Db('temp/temp_db.db')
     result = csr.read_sql(
@@ -758,14 +814,57 @@ def check_for_duplicates():
 def import_delver_lens_cards():
     csr = Db('temp/temp_db.db')
     csr.execute("attach database './data/user_data.db' as ud")
+    csr.execute("attach database './data/app_data.db' as ad")
     result = csr.execute(
     """
-    select name, creation_date
+    select name, creation_date, import_list_id
     from import_lists
     where
         type = 'Collection'
         and selected = 1
     """
     ).fetchall()
-    for name, creation_date in result:
-       add_new_record('list', name, creation_date=creation_date)
+    for name, creation_date, import_list_id in result:
+        add_new_record('list', name, creation_date=creation_date)
+        csr.execute(
+        f"""
+            insert into list_content (
+                list_id,
+                card_uuid,
+                condition_code,
+                foil,
+                language,
+                qnty
+            )
+            select
+                li.list_id,
+                ic.card_uuid,
+                ic.condition_code,
+                ic.foil,
+                ic.language,
+                ic.qnty
+            from import_cards as ic
+            left join import_lists as il
+                on ic.import_list_id = il.import_list_id
+            left join lists as li
+                on il.name = li.name
+
+            where
+                ic.import_list_id = {import_list_id}
+            on conflict (
+                list_id, card_uuid, condition_code,
+                foil, language
+            ) do update set
+                qnty = qnty + excluded.qnty
+        """)
+        count = csr.execute(
+            f"""
+                select sum(qnty)
+                from ud.list_content as lc
+                inner join ud.lists as li
+                    on lc.list_id = li.list_id
+                where li.name = "{name}"
+            """).fetchall()[0][0]
+        st.session_state.last_actions[-1] = \
+            st.session_state.last_actions[-1][:-1] \
+            + f' with {count} cards'

@@ -2,6 +2,7 @@ import streamlit as st
 from utils import *
 
 def get_content():
+    display_toasts()
     with st.sidebar:
         if 's_selected_lists' not in st.session_state:
             dlens_db = st.file_uploader(
@@ -19,6 +20,7 @@ def get_content():
             if submitted and dlens_db and ut_db:
                 dlens_db_path, ut_db_path = save_to_temp_dir(dlens_db, ut_db)
                 temp_import_delver_lens_cards(dlens_db_path, ut_db_path)
+                check_for_tokens()
                 st.session_state.s_selected_lists = True
                 st.rerun()
         else:
@@ -82,4 +84,4 @@ def get_content():
                     table_container.error(msg)
                 else:
                     import_delver_lens_cards()
-                display_toasts()
+                    st.rerun()

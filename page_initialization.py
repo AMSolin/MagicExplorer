@@ -15,6 +15,7 @@ def get_content():
         ('sets', 'app_data.db', reset_table_sets),
         ('languages', 'app_data.db', reset_table_languages),
         ('cards', 'app_data.db', reset_table_cards),
+        ('tokens', 'app_data.db', reset_table_tokens),
         ('foreign_data', 'app_data.db', reset_table_foreign_data),
     ]
     for table in tables_list:
