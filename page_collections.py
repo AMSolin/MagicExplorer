@@ -253,23 +253,32 @@ def get_content():
             card_api_key = [val for val in st.session_state.selected_card[6:].values]
             card_props = get_card_properties(*card_api_key)
             img_container = img_col.container()
-            if card_props.get('card_faces', [{}])[0].get('image_uris'):
+            if card_props.get('card_faces'):
+                labels = ['First', 'Second'] if card_props.get('image_uris') \
+                     else ['Front', 'Back']
                 side = img_col.radio(
                     'no label',
-                    ['Front', 'Back'],
+                    labels,
                     label_visibility='collapsed', 
                     horizontal=True
                 )
-                ix = 0 if side == 'Front' else 1
-                img_container.image(card_props['card_faces'][ix]['image_uris']['normal'])
+                ix = 0 if side in ['Front', 'First'] else 1
+                img_uri = card_props \
+                    .get('card_faces', [{}])[ix] \
+                        .get('image_uris', {}) \
+                            .get(
+                                'normal',
+                                card_props.get('image_uris', {}).get('normal')
+                            )
+                img_container.image(img_uri)
             else:
                 ix = -1
                 img_container.image(card_props['image_uris']['normal'])
             if card_active_tab == card_tabs[0]:
                 def get_card_prop(props_dict, prop_name, side_ix):
-                    value = props_dict.get(
-                        prop_name, 
-                        card_props.get('card_faces', [{}])[side_ix].get(prop_name, None)
+                    value = props_dict \
+                        .get('card_faces', [{}])[side_ix] \
+                            .get(prop_name, props_dict.get(prop_name)
                     )
                     return value
                 if get_card_prop(card_props, 'power', ix):
@@ -289,7 +298,7 @@ def get_content():
                 props_aliases = [
                     ('name', 'Card Name'), ('mana_cost', 'Mana Cost'),
                     ('cmc', 'Mana Value'), ('type_line', 'Types'),
-                    ('oracle_text', 'Card text'), ('flavor_text', 'Flavor Text'),
+                    ('oracle_text', 'Card Text'), ('flavor_text', 'Flavor Text'),
                     ('P/T', 'P/T'), ('rarity', 'Rarity'),
                     ('collector_number', 'Card Number'), ('artist', 'Artist'),
                     ('set_name', 'Set Name'), ('released_at', 'Release'),
@@ -300,6 +309,8 @@ def get_content():
                 for property, alias in props_aliases:
                     property_value = get_card_prop(card_props, property, ix)
                     if property_value:
+                        if 'Text' in alias:
+                            property_value = property_value.replace('\n', '  \n')
                         text_field += f"""**{alias}**:&nbsp;&nbsp;{property_value}  \n"""
                 
                 prop_col.markdown(text_field)
