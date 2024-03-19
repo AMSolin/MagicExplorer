@@ -253,7 +253,7 @@ def get_content():
             card_api_key = [val for val in st.session_state.selected_card[6:].values]
             card_props = get_card_properties(*card_api_key)
             img_container = img_col.container()
-            if card_props.get('card_faces'):
+            if card_props.get('card_faces', [{}])[0].get('image_uris'):
                 side = img_col.radio(
                     'no label',
                     ['Front', 'Back'],
