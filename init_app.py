@@ -86,10 +86,11 @@ def reset_table_lists():
             creation_date integer not null,
             note text,
             is_default_list integer default 0,
+            is_wish_list integer default 0,
             foreign key (player_id) references players(player_id) on delete set null on update cascade
         );
         insert into lists (name, creation_date, is_default_list)
-        values ('Default list', strftime('%s','now'), 1)
+        values ('My list', strftime('%s','now'), 1)
         ;
     """)
 
@@ -128,6 +129,7 @@ def reset_table_decks():
             player_id integer,
             creation_date integer not null,
             note text,
+            is_wish_deck integer default 0,
             foreign key (player_id) references players(player_id)
                 on update cascade on delete set null
         );

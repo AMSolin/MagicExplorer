@@ -63,7 +63,8 @@ def get_content():
                 column_config={
                     'selected': st.column_config.CheckboxColumn("✔"),
                     'type': st.column_config.SelectboxColumn(
-                        'Type', options=['Collection', 'Deck', 'Wishlist'],
+                        'Type',
+                        options=['Collection', 'Wish list','Deck', 'Wish deck'],
                         required=True,  width='small'
                     ),
                     'name': st.column_config.TextColumn('Name', width='medium'),

@@ -611,7 +611,7 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
                 when lists.category = 2
                     then 'Deck'
                 when lists.category = 3
-                    then 'Wishlist'
+                    then 'Wish list'
             end as type,
             cast(substr(lists.creation, 1, 10) as integer) as creation_date
         from exp_db.cards as cards
@@ -817,15 +817,21 @@ def import_delver_lens_cards():
     csr.execute("attach database './data/app_data.db' as ad")
     result = csr.execute(
     """
-    select name, creation_date, import_list_id
+    select name, creation_date, import_list_id, type
     from import_lists
     where
-        type = 'Collection'
+        type in ('Collection', 'Wish list')
         and selected = 1
     """
     ).fetchall()
-    for name, creation_date, import_list_id in result:
+    for name, creation_date, import_list_id, type in result:
         add_new_record('list', name, creation_date=creation_date)
+        list_id = csr.execute(
+                f"select list_id from ud.lists where name = '{name}'"
+            ) \
+            .fetchone()[0]
+        if type == 'Wish list':
+            update_table('list', list_id, 'is_wish_list', 1)
         csr.execute(
         f"""
             insert into list_content (
@@ -837,18 +843,13 @@ def import_delver_lens_cards():
                 qnty
             )
             select
-                li.list_id,
+                {list_id},
                 ic.card_uuid,
                 ic.condition_code,
                 ic.foil,
                 ic.language,
                 ic.qnty
             from import_cards as ic
-            left join import_lists as il
-                on ic.import_list_id = il.import_list_id
-            left join lists as li
-                on il.name = li.name
-
             where
                 ic.import_list_id = {import_list_id}
             on conflict (
@@ -860,10 +861,8 @@ def import_delver_lens_cards():
         count = csr.execute(
             f"""
                 select sum(qnty)
-                from ud.list_content as lc
-                inner join ud.lists as li
-                    on lc.list_id = li.list_id
-                where li.name = "{name}"
+                from ud.list_content
+                where list_id = {list_id}
             """).fetchall()[0][0]
         st.session_state.last_actions[-1] = \
             st.session_state.last_actions[-1][:-1] \
