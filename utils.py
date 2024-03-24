@@ -157,6 +157,26 @@ def search_set_by_name(card_name: str, card_lang: str):
     result = csr.read_sql(query)
     return result
 
+def search_languages_by_card_name(card_uuid):
+    csr = Db('app_data.db')
+    result = csr.read_sql(
+    f"""
+        select distinct
+            language
+        from (
+            select
+                language
+            from cards as c
+            where card_uuid = X'{card_uuid}'
+            union all
+            select
+                language
+            from foreign_data
+            where card_uuid = X'{card_uuid}'
+        ) as t
+    """)
+    return result['language'].to_list()
+
 @st.cache_data
 def generate_set_dict(set_col: pd.Series):
     sets_dict = {}
@@ -405,7 +425,7 @@ def update_table_content(entity, card_id, column, value):
             where
                 list_id = {card_dict['list_id']}
                 and card_uuid = X'{card_dict['card_uuid'].hex()}'
-                and condition_code = {card_dict['condition_code']}
+                and condition_code = '{card_dict['condition_code']}'
                 and foil = {card_dict['foil']}
                 and language = '{card_dict['language']}'
         """)
@@ -590,7 +610,7 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             case
                 when cards.condition <> ''
                     then cards.condition
-                else NULL
+                else 'Near Mint'
             end as condition_name,
             cards.foil,
             cards.general as is_commander,

@@ -88,7 +88,7 @@ def get_content():
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
         card_id_cols = [
             'list_id', 'card_uuid', 'condition_code', 'foil', 'language',
-            'qnty',
+            'qnty', 'name',
             'set_code', 'card_number', 'language_code'
         ]
         if st.session_state.selected_card is not None:
@@ -250,7 +250,7 @@ def get_content():
             card_tabs =['Card overview', 'Edit card']
             card_active_tab = show_tab_bar(card_tabs)
             img_col, prop_col =  st.columns((0.5, 0.5))
-            card_api_key = [val for val in st.session_state.selected_card[6:].values]
+            card_api_key = [val for val in st.session_state.selected_card[-3:].values]
             card_props = get_card_properties(*card_api_key)
             img_container = img_col.container()
             if card_props.get('card_faces'):
@@ -332,22 +332,34 @@ def get_content():
                         'card_id': st.session_state.selected_card,
                         'column': 'list_id',
                         'value': 'st.session_state.v_card_list',
-
                     }
-                )
-                _ = prop_col.selectbox(
-                    'Language:',
-                    key='v_card_language'
                 )
                 prop_col.text('Set:')
                 #TODO panel of set icons
+                _ = prop_col.selectbox(
+                    'Language:',
+                    key='v_card_language',
+                    options=search_languages_by_card_name(
+                        st.session_state.selected_card.loc['card_uuid'].hex()
+                    ),
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'card_id': st.session_state.selected_card,
+                        'column': 'language',
+                        'value': 'st.session_state.v_card_language',
+                    }
+                )
+                #BUG update st.session_state.selected_card
                 _ = prop_col.radio(
                     'Card number:',
+                    options=[1,2],
                     horizontal=True
                 )
                 _ = prop_col.toggle('Foil')
                 _ = prop_col.selectbox(
                     'Condition:',
+                    options=[1,2],
                     key='v_card_condition'
                 )
 
