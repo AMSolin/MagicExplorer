@@ -616,11 +616,11 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             cards.general as is_commander,
             case
                 when cards.tab = 0
-                    then 'main'
+                    then 'Main'
                 when cards.tab = 1
-                    then 'side'
+                    then 'Side'
                 when cards.tab = 2
-                    then 'maybe'
+                    then 'Maybe'
             end as deck_type_name,
             cards.quantity as qnty,
             lists._id as import_list_id,
@@ -831,58 +831,121 @@ def check_for_duplicates():
     msg += 'Import aborted!' if len(msg) > 0 else ''
     return msg
 
-def import_delver_lens_cards():
+def import_delver_lens_cards(list_for_duplicate: str=None):
     csr = Db('temp/temp_db.db')
     csr.execute("attach database './data/user_data.db' as ud")
     csr.execute("attach database './data/app_data.db' as ad")
+    get_list_id_by_name = lambda name: csr.execute(
+            f"select list_id from ud.lists where name = '{name}'"
+        ) \
+        .fetchone()[0]
+    insert_exported_list_content = lambda list_id, import_list_id: csr.execute(
+    f"""
+        insert into list_content (
+            list_id,
+            card_uuid,
+            condition_code,
+            foil,
+            language,
+            qnty
+        )
+        select
+            {list_id},
+            ic.card_uuid,
+            ic.condition_code,
+            ic.foil,
+            ic.language,
+            ic.qnty
+        from import_cards as ic
+        where
+            ic.import_list_id = {import_list_id}
+        on conflict (
+            list_id, card_uuid, condition_code,
+            foil, language
+        ) do update set
+            qnty = qnty + excluded.qnty
+    """)
     result = csr.execute(
     """
-    select name, creation_date, import_list_id, type
-    from import_lists
-    where
-        type in ('Collection', 'Wish list')
-        and selected = 1
+        select name, creation_date, import_list_id, type
+        from import_lists
+        where
+            type in ('Collection', 'Wish list')
+            and selected = 1
     """
     ).fetchall()
     for name, creation_date, import_list_id, type in result:
         add_new_record('list', name, creation_date=creation_date)
-        list_id = csr.execute(
-                f"select list_id from ud.lists where name = '{name}'"
-            ) \
-            .fetchone()[0]
+        list_id = get_list_id_by_name(name)
         if type == 'Wish list':
             update_table('list', list_id, 'is_wish_list', 1)
-        csr.execute(
-        f"""
-            insert into list_content (
-                list_id,
-                card_uuid,
-                condition_code,
-                foil,
-                language,
-                qnty
-            )
-            select
-                {list_id},
-                ic.card_uuid,
-                ic.condition_code,
-                ic.foil,
-                ic.language,
-                ic.qnty
-            from import_cards as ic
-            where
-                ic.import_list_id = {import_list_id}
-            on conflict (
-                list_id, card_uuid, condition_code,
-                foil, language
-            ) do update set
-                qnty = qnty + excluded.qnty
-        """)
+        insert_exported_list_content(list_id, import_list_id)
         count = csr.execute(
             f"""
                 select sum(qnty)
                 from ud.list_content
                 where list_id = {list_id}
+            """).fetchall()[0][0]
+        st.session_state.last_actions[-1] = \
+            st.session_state.last_actions[-1][:-1] \
+            + f' with {count} cards'
+    
+    result = csr.execute(
+    """
+        select name, creation_date, import_list_id, type
+        from import_lists
+        where
+            type in ('Deck', 'Wish deck')
+            and selected = 1
+    """
+    ).fetchall()
+    for name, creation_date, import_list_id, type in result:
+        add_new_record('deck', name, creation_date=creation_date)
+        deck_id = csr.execute(
+                f"select deck_id from ud.decks where name = '{name}'"
+            ) \
+            .fetchone()[0]
+        if type == 'Wish deck':
+            update_table('deck', deck_id, 'is_wish_deck', 1)
+        csr.execute(
+        f"""
+            insert into deck_content (
+                deck_id,
+                card_uuid,
+                is_commander,
+                condition_code,
+                foil,
+                language,
+                deck_type_name,
+                qnty
+            )
+            select
+                {deck_id},
+                ic.card_uuid,
+                ic.is_commander,
+                ic.condition_code,
+                ic.foil,
+                ic.language,
+                ic.deck_type_name,
+                ic.qnty
+            from import_cards as ic
+            where
+                ic.import_list_id = {import_list_id}
+            on conflict (
+                deck_id, card_uuid, condition_code,
+                foil, language, deck_type_name
+            ) do update set
+                qnty = qnty + excluded.qnty
+        """)
+        if list_for_duplicate is not None:
+            list_id = get_list_id_by_name(list_for_duplicate)
+            insert_exported_list_content(list_id, import_list_id)
+
+        count = csr.execute(
+            f"""
+                select sum(qnty)
+                from ud.deck_content
+                where deck_id = {deck_id}
             """).fetchall()[0][0]
         st.session_state.last_actions[-1] = \
             st.session_state.last_actions[-1][:-1] \

@@ -73,6 +73,23 @@ def get_content():
                 column_order=['selected', 'name', 'type', 'open'],
                 on_change=list_callback
             )
+            copy_decks = st.checkbox(
+                'Copy decks content into collection'
+            )
+            if copy_decks:
+                s_lists = pd.concat(
+                    [get_lists()['name'],
+                    df_delver_lists[df_delver_lists['type'] =='Collection']['name']],
+                    axis=0,
+                    ignore_index=True
+                )
+                list_for_duplicate = st.selectbox(
+                    'Choose target collection',
+                    options=s_lists,
+                    key='v_list_for_duplicate',
+                )
+            else:
+                list_for_duplicate = None
             col1, col2 = st.columns(2)
             discard_button = col2.button('Discard import')
             if discard_button:
@@ -84,5 +101,5 @@ def get_content():
                 if len(msg) > 0:
                     table_container.error(msg)
                 else:
-                    import_delver_lens_cards()
+                    import_delver_lens_cards(list_for_duplicate)
                     st.rerun()
