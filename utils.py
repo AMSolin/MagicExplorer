@@ -171,6 +171,7 @@ def search_all_numbers_by_card_number(card_number, card_set_code):
             where
                 set_code = '{card_set_code}'
                 and number = '{card_number}'
+                and coalesce(side, 'a') = 'a'
         ) as n
             on c.name = n.name
         where
