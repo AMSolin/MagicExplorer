@@ -128,7 +128,7 @@ def get_content():
             column_config={
                 'list_id': None,
                 'card_uuid': None,
-                # 'language': None,
+                'language': None,
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1
                 ),
@@ -140,7 +140,7 @@ def get_content():
                 'rarity': None,
                 'mana_cost': 'Cost',
                 'foil': st.column_config.CheckboxColumn('Foil'),
-                'condition_code': 'Cond',
+                'condition_code': None,
                 'create_ns': None,
                 'open': st.column_config.CheckboxColumn('Open'),
             },
@@ -340,7 +340,7 @@ def get_content():
                 )
                 prop_col.text('Set:')
                 #TODO panel of set icons
-                list_of_languages = search_languages_by_card_name(
+                list_of_languages = search_languages_by_card_uuid(
                         st.session_state.selected_card.loc['card_uuid'].hex()
                     )
                 current_language = list_of_languages.index(
@@ -359,16 +359,58 @@ def get_content():
                         'value': 'st.session_state.v_card_language',
                     }
                 )
+                df_numbers = search_all_numbers_by_card_number(
+                    st.session_state.selected_card.loc['card_number'],
+                    st.session_state.selected_card.loc['set_code'],
+                )
+                current_number = int(
+                    df_numbers[
+                        df_numbers['card_number'] == \
+                            st.session_state.selected_card['card_number']
+                    ].index[0]
+                )
                 _ = prop_col.radio(
                     'Card number:',
-                    options=[1,2],
-                    horizontal=True
+                    horizontal=True,
+                    key='v_card_number',
+                    options=df_numbers['card_uuid'],
+                    format_func=lambda x: dict(df_numbers.values)[x],
+                    index=current_number,
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'card_id': st.session_state.selected_card,
+                        'column': 'card_uuid',
+                        'value': 'st.session_state.v_card_number',
+                    }
                 )
-                _ = prop_col.toggle('Foil')
+                _ = prop_col.toggle(
+                    '**:rainbow[Foil]**',
+                    key='v_foil_toggle',
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'card_id': st.session_state.selected_card,
+                        'column': 'foil',
+                        'value': 'st.session_state.v_foil_toggle',
+                    }
+                )
+                list_of_conditions = ['NM', 'SP', 'MP', 'HP', 'D']
+                current_condition_id = list_of_conditions.index(
+                    st.session_state.selected_card['condition_code']
+                )
                 _ = prop_col.selectbox(
                     'Condition:',
-                    options=[1,2],
-                    key='v_card_condition'
+                    options=list_of_conditions,
+                    index=current_condition_id,
+                    key='v_card_condition',
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'entity': 'list',
+                        'card_id': st.session_state.selected_card,
+                        'column': 'condition_code',
+                        'value': 'st.session_state.v_card_condition',
+                    }
                 )
 
 

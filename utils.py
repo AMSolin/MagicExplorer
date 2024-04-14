@@ -157,7 +157,31 @@ def search_set_by_name(card_name: str, card_lang: str):
     result = csr.read_sql(query)
     return result
 
-def search_languages_by_card_name(card_uuid):
+def search_all_numbers_by_card_number(card_number, card_set_code):
+    csr = Db('app_data.db')
+    result = csr.read_sql(
+    f"""
+        select
+            c.card_uuid,
+            c.number as card_number
+        from cards as c
+        inner join (
+            select name
+            from cards
+            where
+                set_code = '{card_set_code}'
+                and number = '{card_number}'
+        ) as n
+            on c.name = n.name
+        where
+            c.set_code = '{card_set_code}'
+            and coalesce(c.side, 'a') = 'a'
+        order by c.number
+    """)
+    return result
+
+
+def search_languages_by_card_uuid(card_uuid):
     csr = Db('app_data.db')
     result = csr.read_sql(
     f"""
@@ -263,7 +287,7 @@ def get_list_content(list_id):
             ca.number as card_number,
             ca.type,
             la.language_code,
-            se.set_code,
+            ca.set_code,
             --se.keyrune_code, #TODO add keyrune symbol
             ca.rarity,
             ca.mana_cost,
