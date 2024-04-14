@@ -429,7 +429,11 @@ def update_table_content(entity, card_id, column, value):
                 and foil = {card_dict['foil']}
                 and language = '{card_dict['language']}'
         """)
-        st.session_state.selected_card = None
+        if column == 'qnty':
+            st.session_state.selected_card = None
+        else:
+            st.session_state.selected_card[column] = value
+            st.session_state.selected_card.rename('need_update', inplace=True)
     if not ((column == 'qnty') and (value == 0)):
         #Если не устанаваливали qnty = 0
         card_dict[column] = value

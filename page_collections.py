@@ -94,6 +94,10 @@ def get_content():
         if st.session_state.selected_card is not None:
             mask = (df_list_content[card_id_cols[:5]] == st.session_state.selected_card[:5]).all(1)
             df_list_content.loc[mask, 'open'] = True
+            if st.session_state.selected_card.name == 'need_update':
+                st.session_state.selected_card.name = ''
+                st.session_state.selected_card = df_list_content \
+                    [card_id_cols].loc[mask].iloc[0]
         
         def update_table_content_wrapper(**kwargs):
             if 'value' not in kwargs:
@@ -124,7 +128,7 @@ def get_content():
             column_config={
                 'list_id': None,
                 'card_uuid': None,
-                'language': None,
+                # 'language': None,
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1
                 ),
@@ -336,12 +340,17 @@ def get_content():
                 )
                 prop_col.text('Set:')
                 #TODO panel of set icons
+                list_of_languages = search_languages_by_card_name(
+                        st.session_state.selected_card.loc['card_uuid'].hex()
+                    )
+                current_language = list_of_languages.index(
+                    st.session_state.selected_card['language']
+                )
                 _ = prop_col.selectbox(
                     'Language:',
                     key='v_card_language',
-                    options=search_languages_by_card_name(
-                        st.session_state.selected_card.loc['card_uuid'].hex()
-                    ),
+                    options=list_of_languages,
+                    index=current_language,
                     on_change=update_table_content_wrapper,
                     kwargs={
                         'entity': 'list',
@@ -350,7 +359,6 @@ def get_content():
                         'value': 'st.session_state.v_card_language',
                     }
                 )
-                #BUG update st.session_state.selected_card
                 _ = prop_col.radio(
                     'Card number:',
                     options=[1,2],
