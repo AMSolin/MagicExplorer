@@ -201,13 +201,14 @@ def reset_table_sets():
         drop table if exists main.sets;
         create table sets (
             set_code text primary key,
+            name text,
             keyrune_code text,
             release_date integer
         );
         insert into sets (
-            set_code, keyrune_code, release_date
+            set_code, name, keyrune_code, release_date
         )
-        select code, keyrunecode, strftime('%s', releasedate)
+        select code, name, keyrunecode, strftime('%s', releasedate)
         from ap.sets
     """)
 

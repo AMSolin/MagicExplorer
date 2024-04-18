@@ -19,6 +19,8 @@ def init_session_variables():
         st.session_state.counter = 0
     if 'selected_prev_card' not in st.session_state:
         st.session_state.selected_prev_card = ''
+    if 'prev_searched_card_name' not in st.session_state:
+        st.session_state.prev_searched_card_name = ''
     display_toasts()
 
 def export_section():

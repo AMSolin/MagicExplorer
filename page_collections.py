@@ -1,4 +1,5 @@
 import streamlit as st
+from st_click_detector import click_detector
 from utils import *
 
 def get_content():
@@ -88,7 +89,7 @@ def get_content():
         df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
         card_id_cols = [
             'list_id', 'card_uuid', 'condition_code', 'foil', 'language',
-            'qnty', 'name',
+            'qnty', 'name', 'keyrune_code', 'set_name',
             'set_code', 'card_number', 'language_code'
         ]
         if st.session_state.selected_card is not None:
@@ -136,7 +137,8 @@ def get_content():
                 'card_number': None,
                 'type': 'Type', #TODO display in native card language
                 'language_code': None,
-                'set_code': None,
+                'set_name': None,
+                'keyrune_code': None,
                 'rarity': None,
                 'mana_cost': 'Cost',
                 'foil': st.column_config.CheckboxColumn('Foil'),
@@ -338,8 +340,22 @@ def get_content():
                         'value': 'st.session_state.v_card_list',
                     }
                 )
-                prop_col.text('Set:')
-                #TODO panel of set icons
+                prop_col_set_cont = prop_col.container()
+                s_keyrune_codes = search_set_by_name(
+                    st.session_state.selected_card['name'],
+                    st.session_state.selected_card['language'],
+                    limit_languages=False #TODO check this param
+                )['keyrune_code']
+                sets_dict = generate_set_dict(
+                    s_keyrune_codes,
+                    selected_set=st.session_state.selected_card['keyrune_code']
+                )
+                css = generate_css_set_icons(sets_dict)
+                with prop_col as _:
+                    selected_set = click_detector(css, key='selected_set')
+                prop_col_set_cont.markdown(
+                    f"Set:&nbsp;&nbsp;**{st.session_state.selected_card['set_name']}**"
+                )
                 list_of_languages = search_languages_by_card_uuid(
                         st.session_state.selected_card.loc['card_uuid'].hex()
                     )

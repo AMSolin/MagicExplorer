@@ -105,7 +105,9 @@ def search_card_by_name(substr_card: str):
     return result
 
 @st.cache_data
-def search_set_by_name(card_name: str, card_lang: str):
+def search_set_by_name(
+    card_name: str, card_lang: str, limit_languages: bool=True
+):
     csr = Db('app_data.db')
     card_name = card_name.replace("'", "''")
     if card_lang in ['English', 'Phyrexian']:
@@ -127,7 +129,7 @@ def search_set_by_name(card_name: str, card_lang: str):
                 and coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
-    else:
+    elif limit_languages:
         query = f"""
             select
                 c.name,
@@ -152,6 +154,24 @@ def search_set_by_name(card_name: str, card_lang: str):
                 on f.language = l.language
             where
                 coalesce(c.side, 'a') = 'a'
+            order by s.release_date desc, c.number
+        """
+    else :
+        query = f"""
+            select distinct
+                lower(s.keyrune_code) as keyrune_code
+            from cards as c
+            inner join (
+                select distinct
+                    c.name
+                from cards as c
+                inner join foreign_data as f
+                    on c.card_uuid = f.card_uuid
+                where 
+                    (c.language = '{card_lang}' and c.name = '{card_name}')
+                    or (f.language = '{card_lang}' and f.name = '{card_name}')
+            ) as f
+                on c.name = f.name
             order by s.release_date desc, c.number
         """
     result = csr.read_sql(query)
@@ -203,20 +223,18 @@ def search_languages_by_card_uuid(card_uuid):
     return result['language'].to_list()
 
 @st.cache_data
-def generate_set_dict(set_col: pd.Series):
+def generate_set_dict(set_col: pd.Series, selected_set: str=None):
     sets_dict = {}
+    if selected_set:
+        st.session_state.selected_set = selected_set
     for ix, code in set_col.drop_duplicates().items():
-        if ix == 0:
-            sets_dict['default_code'] = code
+        if 'selected_set' not in st.session_state and ix == 0:
+            st.session_state.selected_set = code
         sets_dict[code] = f'<a id="{code}" class="ss ss-{code} ss-2x"></a> '
     return sets_dict
 
 def generate_css_set_icons(sets_dict):
     css = '<link href="//cdn.jsdelivr.net/npm/keyrune@latest/css/keyrune.css" rel="stylesheet" type="text/css" />'
-    if ('selected_set' not in st.session_state) or (st.session_state.selected_set not in sets_dict.keys()):
-        st.session_state.selected_set = sets_dict.pop('default_code')
-    else:
-        del sets_dict['default_code']
     for set, set_css in sets_dict.items():
         if set == st.session_state.selected_set:
             set_css = f'<span style="color: orange">{set_css}</span>'
@@ -289,7 +307,8 @@ def get_list_content(list_id):
             ca.type,
             la.language_code,
             ca.set_code,
-            --se.keyrune_code, #TODO add keyrune symbol
+            lower(se.keyrune_code) as keyrune_code, --#TODO add keyrune symbol
+            se.name as set_name,
             ca.rarity,
             ca.mana_cost,
             lc.foil

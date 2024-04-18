@@ -11,12 +11,15 @@ def get_content():
     searh_func = to_lower_and_exact_search if exact_search else to_lower_and_substring_search
     searched_card_name = st_searchbox(
         search_function=searh_func,
-            placeholder="Enter card name",
-            key="search_card_by_name",
-            clearable=True
-        )
-
+        placeholder="Enter card name",
+        key="search_card_by_name",
+        clearable=True
+    )
     if searched_card_name:
+        if searched_card_name != st.session_state.prev_searched_card_name \
+            and 'selected_set' in st.session_state:
+            del st.session_state.selected_set
+        st.session_state.prev_searched_card_name = searched_card_name
         card_name, card_lang = searched_card_name
         df_card_prints = search_set_by_name(card_name, card_lang)
         sets_dict = generate_set_dict(df_card_prints['keyrune_code'])
