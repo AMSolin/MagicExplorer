@@ -114,10 +114,14 @@ def search_set_by_name(
         query = f"""
             select
                 c.name,
-                c.set_code as set_code,
+                c.set_code,
                 lower(s.keyrune_code) as keyrune_code,
                 c.number,
-                language_code
+                c.language,
+                language_code,
+                row_number() over (
+                    partition by c.set_code order by c.number
+                ) as row_number
             from cards as c
             left join sets as s
                 on s.set_code = c.set_code
@@ -125,7 +129,7 @@ def search_set_by_name(
                 on c.language = l.language
             where
                 c.name = '{card_name}'
-                and c.language = '{card_lang}'
+                and c.language in ('English', 'Phyrexian')
                 and coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
@@ -163,9 +167,10 @@ def search_set_by_name(
             from cards as c
             inner join (
                 select distinct
-                    c.name
+                    c.name,
+                    coalesce(f.language, c.language) as language
                 from cards as c
-                inner join foreign_data as f
+                left join foreign_data as f
                     on c.card_uuid = f.card_uuid
                 where 
                     (c.language = '{card_lang}' and c.name = '{card_name}')
@@ -174,6 +179,7 @@ def search_set_by_name(
                 on c.name = f.name
             order by s.release_date desc, c.number
         """
+        #TODO Check this query
     result = csr.read_sql(query)
     return result
 
@@ -222,15 +228,21 @@ def search_languages_by_card_uuid(card_uuid):
     """)
     return result['language'].to_list()
 
-@st.cache_data
-def generate_set_dict(set_col: pd.Series, selected_set: str=None):
+def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None):
     sets_dict = {}
-    if selected_set:
-        st.session_state.selected_set = selected_set
-    for ix, code in set_col.drop_duplicates().items():
-        if 'selected_set' not in st.session_state and ix == 0:
-            st.session_state.selected_set = code
-        sets_dict[code] = f'<a id="{code}" class="ss ss-{code} ss-2x"></a> '
+    df_set_codes = df_set_codes \
+        [df_set_codes['row_number'] == 1] \
+        [['set_code', 'keyrune_code', 'language', 'number']]
+    if selected_card is not None:
+        st.session_state.selected_set = ' '.join(
+                selected_card.loc[['set_code', 'card_number', 'language']].values
+            )
+    for row in df_set_codes.itertuples():
+        idx, set_code, keyrune_code, language, card_number = row
+        css_id = f'{set_code} {card_number} {language}'
+        if 'selected_set' not in st.session_state and idx == 0:
+            st.session_state.selected_set = css_id
+        sets_dict[css_id] = f'<a id="{css_id}" class="ss ss-{keyrune_code} ss-2x"></a> '
     return sets_dict
 
 def generate_css_set_icons(sets_dict):
@@ -250,8 +262,8 @@ def get_card_properties(set_code, card_number, lang):
 
 def get_card_images(df, selected_set):
     content = ''
-    df_filtered = df[df['keyrune_code'] == selected_set] \
-        .drop(columns=['name', 'keyrune_code'])
+    df_filtered = df[df['set_code'] == selected_set.split()[0]] \
+        [['set_code', 'number', 'language_code']]
     for row in df_filtered.itertuples(index=False):
         set_code, card_number, lang = row
         card_props = get_card_properties(set_code, card_number, lang)

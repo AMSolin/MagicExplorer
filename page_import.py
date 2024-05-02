@@ -22,7 +22,7 @@ def get_content():
         st.session_state.prev_searched_card_name = searched_card_name
         card_name, card_lang = searched_card_name
         df_card_prints = search_set_by_name(card_name, card_lang)
-        sets_dict = generate_set_dict(df_card_prints['keyrune_code'])
+        sets_dict = generate_set_dict(df_card_prints)
         css = generate_css_set_icons(sets_dict)
 
         selected_set = click_detector(css, key='selected_set')

@@ -13,7 +13,8 @@ def get_content():
 
     if 'selected_card' not in st.session_state:
         st.session_state.selected_card = None
-        st.session_state.active_expander = 'list_info'
+    elif st.session_state.get('keyrune_code') != st.session_state.get('selected_set'):
+        pass
     
     with st.sidebar:
         table_container = st.container()
@@ -341,14 +342,14 @@ def get_content():
                     }
                 )
                 prop_col_set_cont = prop_col.container()
-                s_keyrune_codes = search_set_by_name(
+                df_set_codes = search_set_by_name(
                     st.session_state.selected_card['name'],
                     st.session_state.selected_card['language'],
                     limit_languages=False #TODO check this param
-                )['keyrune_code']
+                )
                 sets_dict = generate_set_dict(
-                    s_keyrune_codes,
-                    selected_set=st.session_state.selected_card['keyrune_code']
+                    df_set_codes,
+                    selected_card=st.session_state.selected_card
                 )
                 css = generate_css_set_icons(sets_dict)
                 with prop_col as _:
