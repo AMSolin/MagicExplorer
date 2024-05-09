@@ -119,6 +119,7 @@ def search_set_by_name(
                 c.number,
                 c.language,
                 language_code,
+                c.card_uuid,
                 row_number() over (
                     partition by c.set_code order by c.number
                 ) as row_number
@@ -232,14 +233,15 @@ def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None)
     sets_dict = {}
     df_set_codes = df_set_codes \
         [df_set_codes['row_number'] == 1] \
-        [['set_code', 'keyrune_code', 'language', 'number']]
+        [['set_code', 'keyrune_code', 'number', 'language', 'card_uuid']]
     if selected_card is not None:
         st.session_state.selected_set = ' '.join(
-                selected_card.loc[['set_code', 'card_number', 'language']].values
-            )
+            selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid']] \
+                .apply(lambda x: x if isinstance(x, str) else x.hex()).values
+        )
     for row in df_set_codes.itertuples():
-        idx, set_code, keyrune_code, language, card_number = row
-        css_id = f'{set_code} {card_number} {language}'
+        idx, set_code, keyrune_code, card_number, language, card_uuid = row
+        css_id = f'{set_code} {card_number} {language} {card_uuid.hex()}'
         if 'selected_set' not in st.session_state and idx == 0:
             st.session_state.selected_set = css_id
         sets_dict[css_id] = f'<a id="{css_id}" class="ss ss-{keyrune_code} ss-2x"></a> '
@@ -247,8 +249,8 @@ def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None)
 
 def generate_css_set_icons(sets_dict):
     css = '<link href="//cdn.jsdelivr.net/npm/keyrune@latest/css/keyrune.css" rel="stylesheet" type="text/css" />'
-    for set, set_css in sets_dict.items():
-        if set == st.session_state.selected_set:
+    for css_id, set_css in sets_dict.items():
+        if css_id.split(' ')[0] == st.session_state.selected_set.split(' ')[0]:
             set_css = f'<span style="color: orange">{set_css}</span>'
         css+= set_css
     return css
@@ -487,12 +489,19 @@ def update_table_content(entity, card_id, column, value):
         """)
         if column == 'qnty':
             st.session_state.selected_card = None
+        elif isinstance(column, list):
+            for i in range(len(column)):
+                card_dict[column[i]] = value[i]
+                st.session_state.selected_card[column[i]] = value[i]
+            st.session_state.selected_card.rename('need_update', inplace=True)
         else:
+            card_dict[column] = value
             st.session_state.selected_card[column] = value
             st.session_state.selected_card.rename('need_update', inplace=True)
+        if 'selected_set' in st.session_state:
+            del st.session_state.selected_set
     if not ((column == 'qnty') and (value == 0)):
         #Если не устанаваливали qnty = 0
-        card_dict[column] = value
         if column != 'qnty':
             #В случае конфликта при изменении ключевых полей
             #сложим новое и прежнее значения qnty вместе

@@ -1,6 +1,7 @@
 import streamlit as st
 from st_click_detector import click_detector
 from utils import *
+import uuid
 
 def get_content():
     display_toasts()
@@ -13,8 +14,16 @@ def get_content():
 
     if 'selected_card' not in st.session_state:
         st.session_state.selected_card = None
-    elif st.session_state.get('keyrune_code') != st.session_state.get('selected_set'):
-        pass
+    elif ('selected_set' in st.session_state) and (
+            st.session_state.selected_card.loc[
+                ['set_code', 'card_number', 'language', 'card_uuid']
+            ].apply(lambda x: x if isinstance(x, str) else x.hex()) \
+            .values != st.session_state.selected_set.split(' ')
+    ).any():
+        _, _, language, card_uuid = st.session_state.selected_set.split(' ')
+        columns = ['language', 'card_uuid']
+        values = [language, uuid.UUID(card_uuid).bytes]
+        update_table_content('list', st.session_state.selected_card, columns, values)
     
     with st.sidebar:
         table_container = st.container()
@@ -116,6 +125,8 @@ def get_content():
                         ].iloc[ix]
                     else:
                         st.session_state.selected_card = None
+                    if 'selected_set' in st.session_state:
+                        del st.session_state.selected_set
                     return
                 update_table_content('list', df_list_content.iloc[ix], column, value)
             else:
