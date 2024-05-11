@@ -383,7 +383,8 @@ def reset_table_foreign_data():
                 when language = 'Portuguese (Brazil)'
                     then 'Portuguese'
                 else language
-            end as language
+            end as language,
+            type
         from ap.cardforeigndata
     """) \
         .assign(card_uuid=lambda df: df['card_uuid'].apply(lambda x:uuid.UUID(x)))
@@ -393,7 +394,8 @@ def reset_table_foreign_data():
         create table {table} (
             card_uuid guid,
             name text,
-            language text
+            language text,
+            type text
         )
     """)
     csr.execute(create_table_ddl('foreign_data_temp'))

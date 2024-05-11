@@ -145,9 +145,9 @@ def get_content():
                 'qnty': st.column_config.NumberColumn(
                     'Qnty', min_value=0, max_value=99, step=1
                 ),
-                'name': 'Name', #TODO display in native card language
+                'name':'Name',
                 'card_number': None,
-                'type': 'Type', #TODO display in native card language
+                'type': 'Type',
                 'language_code': None,
                 'set_name': None,
                 'keyrune_code': None,
@@ -356,7 +356,7 @@ def get_content():
                 df_set_codes = search_set_by_name(
                     st.session_state.selected_card['name'],
                     st.session_state.selected_card['language'],
-                    limit_languages=False #TODO check this param
+                    limit_languages=False
                 )
                 sets_dict = generate_set_dict(
                     df_set_codes,
@@ -413,7 +413,7 @@ def get_content():
                     }
                 )
                 _ = prop_col.toggle(
-                    '**:rainbow[Foil]**',
+                    '**:rainbow-background[Foil]**',
                     key='v_foil_toggle',
                     on_change=update_table_content_wrapper,
                     kwargs={

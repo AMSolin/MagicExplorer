@@ -110,31 +110,7 @@ def search_set_by_name(
 ):
     csr = Db('app_data.db')
     card_name = card_name.replace("'", "''")
-    if card_lang in ['English', 'Phyrexian']:
-        query = f"""
-            select
-                c.name,
-                c.set_code,
-                lower(s.keyrune_code) as keyrune_code,
-                c.number,
-                c.language,
-                language_code,
-                c.card_uuid,
-                row_number() over (
-                    partition by c.set_code order by c.number
-                ) as row_number
-            from cards as c
-            left join sets as s
-                on s.set_code = c.set_code
-            left join languages as l
-                on c.language = l.language
-            where
-                c.name = '{card_name}'
-                and c.language in ('English', 'Phyrexian')
-                and coalesce(c.side, 'a') = 'a'
-            order by s.release_date desc, c.number
-        """
-    elif limit_languages:
+    if limit_languages:
         query = f"""
             select
                 c.name,
@@ -161,26 +137,76 @@ def search_set_by_name(
                 coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
-    else :
+    elif card_lang in ['English', 'Phyrexian']:
         query = f"""
-            select distinct
-                lower(s.keyrune_code) as keyrune_code
+            select
+                c.name,
+                c.set_code,
+                lower(s.keyrune_code) as keyrune_code,
+                c.number,
+                c.language,
+                language_code,
+                c.card_uuid,
+                row_number() over (
+                    partition by c.set_code order by c.number
+                ) as row_number
             from cards as c
-            inner join (
-                select distinct
-                    c.name,
-                    coalesce(f.language, c.language) as language
-                from cards as c
-                left join foreign_data as f
-                    on c.card_uuid = f.card_uuid
-                where 
-                    (c.language = '{card_lang}' and c.name = '{card_name}')
-                    or (f.language = '{card_lang}' and f.name = '{card_name}')
-            ) as f
-                on c.name = f.name
+            left join sets as s
+                on s.set_code = c.set_code
+            left join languages as l
+                on c.language = l.language
+            where
+                c.name = '{card_name}'
+                and c.language in ('English', 'Phyrexian')
+                and coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, c.number
         """
-        #TODO Check this query
+    else :
+        query = f"""
+            with foreing_cards as (
+                select
+                    name,
+                    language,
+                    card_uuid
+                from foreign_data
+                where
+                    name = '{card_name}' and
+                    language = '{card_lang}'
+            )
+            select
+                c.set_code,
+                lower(s.keyrune_code) as keyrune_code,
+                c.number,
+                coalesce(f.language, c.language) as language,
+                language_code,
+                c.card_uuid,
+                row_number() over (
+                    partition by 
+                        c.set_code 
+                    order by 
+                        case when f.language is not NULL then 0
+                            else 1
+                        end,
+                        c.number
+                ) as row_number
+            from cards as c
+            inner join (
+                select distinct ct.name, ct.language
+                from cards as ct
+                inner join foreing_cards as fct
+                    on ct.card_uuid = fct.card_uuid
+            ) as t
+                on c.name = t.name and c.language = t.language
+            left join foreing_cards as f
+                on c.card_uuid = f.card_uuid
+            left join sets as s
+                on s.set_code = c.set_code
+            left join languages as l
+                on coalesce(f.language, c.language) = l.language
+            where
+                coalesce(c.side, 'a') = 'a'
+            order by s.release_date desc, c.number
+        """
     result = csr.read_sql(query)
     return result
 
@@ -316,12 +342,12 @@ def get_list_content(list_id):
             lc.condition_code,
             lc.language,
             lc.qnty,
-            ca.name, --#TODO change name according language
+            coalesce(fd.name, ca.name) as name,
             ca.number as card_number,
-            ca.type,
+            coalesce(fd.type, ca.type) as type,
             la.language_code,
             ca.set_code,
-            lower(se.keyrune_code) as keyrune_code, --#TODO add keyrune symbol
+            lower(se.keyrune_code) as keyrune_code,
             se.name as set_name,
             ca.rarity,
             ca.mana_cost,
@@ -329,6 +355,8 @@ def get_list_content(list_id):
         from list_content as lc
         left join cards as ca
             on lc.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on lc.card_uuid = fd.card_uuid and lc.language = fd.language
         left join sets as se
             on ca.set_code = se.set_code
         left join languages as la
