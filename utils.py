@@ -106,38 +106,12 @@ def search_card_by_name(substr_card: str):
 
 @st.cache_data
 def search_set_by_name(
-    card_name: str, card_lang: str, limit_languages: bool=True
+    card_name: str, card_lang: str
 ):
     csr = Db('app_data.db')
     card_name = card_name.replace("'", "''")
-    if limit_languages:
-        query = f"""
-            select
-                c.name,
-                c.set_code as set_code,
-                lower(s.keyrune_code) as keyrune_code,
-                c.number,
-                l.language_code
-            from cards as c
-            inner join (
-                select
-                    card_uuid,
-                    language
-                from foreign_data
-                where 
-                    name = '{card_name}'
-                    and language = '{card_lang}'
-            ) as f
-                on c.card_uuid = f.card_uuid
-            left join sets as s
-                on s.set_code = c.set_code
-            left join languages as l
-                on f.language = l.language
-            where
-                coalesce(c.side, 'a') = 'a'
-            order by s.release_date desc, c.number
-        """
-    elif card_lang in ['English', 'Phyrexian']:
+
+    if card_lang in ['English', 'Phyrexian']:
         query = f"""
             select
                 c.name,
@@ -159,7 +133,7 @@ def search_set_by_name(
                 c.name = '{card_name}'
                 and c.language in ('English', 'Phyrexian')
                 and coalesce(c.side, 'a') = 'a'
-            order by s.release_date desc, c.number
+            order by s.release_date desc, cast(c.number as int)
         """
     else :
         query = f"""
@@ -205,7 +179,7 @@ def search_set_by_name(
                 on coalesce(f.language, c.language) = l.language
             where
                 coalesce(c.side, 'a') = 'a'
-            order by s.release_date desc, c.number
+            order by s.release_date desc, cast(c.number as int)
         """
     result = csr.read_sql(query)
     return result
@@ -230,7 +204,7 @@ def search_all_numbers_by_card_number(card_number, card_set_code):
         where
             c.set_code = '{card_set_code}'
             and coalesce(c.side, 'a') = 'a'
-        order by c.number
+        order by cast(c.number as int)
     """)
     return result
 

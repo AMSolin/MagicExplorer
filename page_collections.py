@@ -296,8 +296,7 @@ def get_content():
                 def get_card_prop(props_dict, prop_name, side_ix):
                     value = props_dict \
                         .get('card_faces', [{}])[side_ix] \
-                            .get(prop_name, props_dict.get(prop_name)
-                    )
+                        .get(prop_name, props_dict.get(prop_name))
                     return value
                 if get_card_prop(card_props, 'power', ix):
                     power = get_card_prop(card_props, 'power', ix)
@@ -314,9 +313,11 @@ def get_content():
                         legalities += (f'{legality}, '.capitalize())
                 card_props['Legalities_only'] = legalities[:-2]
                 props_aliases = [
-                    ('name', 'Card Name'), ('mana_cost', 'Mana Cost'),
-                    ('cmc', 'Mana Value'), ('type_line', 'Types'),
-                    ('oracle_text', 'Card Text'), ('flavor_text', 'Flavor Text'),
+                    ('printed_name', 'Card Name'), ('name', 'Card Name'),
+                    ('mana_cost', 'Mana Cost'), ('cmc', 'Mana Value'),
+                    ('printed_type_line', 'Types'), ('type_line', 'Types'),
+                    ('printed_text', 'Card Text'), ('oracle_text', 'Card Text'),
+                    ('flavor_text', 'Flavor Text'), 
                     ('P/T', 'P/T'), ('rarity', 'Rarity'),
                     ('collector_number', 'Card Number'), ('artist', 'Artist'),
                     ('set_name', 'Set Name'), ('released_at', 'Release'),
@@ -324,9 +325,15 @@ def get_content():
                 ]
 
                 text_field = ''
+                skip_next_property = False
                 for property, alias in props_aliases:
                     property_value = get_card_prop(card_props, property, ix)
-                    if property_value:
+                    if skip_next_property:
+                        skip_next_property = False
+                        continue
+                    elif property_value:
+                        if 'printed' in property:
+                            skip_next_property = True
                         if 'Text' in alias:
                             property_value = property_value.replace('\n', '  \n')
                         text_field += f"""**{alias}**:&nbsp;&nbsp;{property_value}  \n"""
@@ -355,8 +362,7 @@ def get_content():
                 prop_col_set_cont = prop_col.container()
                 df_set_codes = search_set_by_name(
                     st.session_state.selected_card['name'],
-                    st.session_state.selected_card['language'],
-                    limit_languages=False
+                    st.session_state.selected_card['language']
                 )
                 sets_dict = generate_set_dict(
                     df_set_codes,
