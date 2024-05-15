@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sqlite3
 import uuid
 import pandas as pd
@@ -8,7 +9,6 @@ import datetime
 import time
 import os
 from typing import List, Tuple
-import extra_streamlit_components as stx
 
 sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
 sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
@@ -635,12 +635,29 @@ def manual_import_cards_to_user_data(
             f'{df["Qnty"].sum()} cards added to deck {deck_name}'
         )
 
-def show_tab_bar(tabs: list):
-    data = []
-    for tab in tabs:
-        data.append(stx.TabBarItemData(id=tab, title=tab, description=None))
-    tab_bar = stx.tab_bar(data=data, default=tabs[0])
-    return tab_bar
+def show_tab_bar(
+        labels: list[str], key: str, default: str | None = None, max_size: int = 6,
+        tabs_size: list[float | int] | None = None
+    ) -> str:
+    """
+    Group of buttons with the given labels. Return the selected label.
+    """
+    if key not in st.session_state:
+        st.session_state[key] = default or labels[0]
+
+    if tabs_size:
+        cols = st.columns(tabs_size)
+    else:
+        cols = st.columns([1] * len(labels) + [max_size - len(labels)])
+
+    def _set_label(label: str) -> None:
+        st.session_state.update(**{key: label})
+    selected_label = st.session_state[key]
+
+    for col, label in zip(cols, labels):
+        btn_type = "primary" if selected_label == label else "secondary"
+        col.button(label, on_click=_set_label, args=(label,), use_container_width=True, type=btn_type)
+    return selected_label
 
 def save_to_temp_dir(*args):
     for root, _, files in os.walk('./data/temp'):
