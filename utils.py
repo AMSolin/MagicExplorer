@@ -642,7 +642,7 @@ def show_tab_bar(
     """
     Group of buttons with the given labels. Return the selected label.
     """
-    if key not in st.session_state:
+    if key not in st.session_state or st.session_state[key] is None:
         st.session_state[key] = default or labels[0]
 
     if tabs_size:
