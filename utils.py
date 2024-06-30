@@ -84,7 +84,6 @@ def to_lower_and_exact_search(substr_card: str):
     return search_card_by_name(substr_card.lower())
 
 
-@st.cache_data
 def search_card_by_name(substr_card: str):
     if len(substr_card) > 0:
         csr = Db('app_data.db')
@@ -117,10 +116,13 @@ def search_set_by_name(
                 c.name,
                 c.set_code,
                 lower(s.keyrune_code) as keyrune_code,
-                c.number,
+                s.name as set_name,
+                c.number as card_number,
                 c.language,
                 language_code,
                 c.card_uuid,
+                'NM' as condition_code,
+                0 as foil,
                 row_number() over (
                     partition by c.set_code order by c.number
                 ) as row_number
@@ -148,12 +150,16 @@ def search_set_by_name(
                     language = '{card_lang}'
             )
             select
+                c.name,
                 c.set_code,
                 lower(s.keyrune_code) as keyrune_code,
-                c.number,
+                s.name as set_name,
+                c.number as card_number,
                 coalesce(f.language, c.language) as language,
                 language_code,
                 c.card_uuid,
+                'NM' as condition_code,
+                0 as foil,
                 row_number() over (
                     partition by 
                         c.set_code 
@@ -189,8 +195,8 @@ def search_all_numbers_by_card_number(card_number, card_set_code):
     result = csr.read_sql(
     f"""
         select
-            c.card_uuid,
-            c.number as card_number
+            c.number as card_number,
+            c.card_uuid
         from cards as c
         inner join (
             select name
@@ -233,7 +239,7 @@ def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None)
     sets_dict = {}
     df_set_codes = df_set_codes \
         [df_set_codes['row_number'] == 1] \
-        [['set_code', 'keyrune_code', 'number', 'language', 'card_uuid']]
+        [['set_code', 'keyrune_code', 'card_number', 'language', 'card_uuid']]
     if selected_card is not None:
         st.session_state.selected_set = ' '.join(
             selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid']] \

@@ -7,7 +7,7 @@ from import_utils import *
 
 def get_content():
     init_session_variables()
-    exact_search = st.checkbox('Точный поиск')
+    exact_search = st.checkbox('Exact match')
     searh_func = to_lower_and_exact_search if exact_search else to_lower_and_substring_search
     searched_card_name = st_searchbox(
         search_function=searh_func,
