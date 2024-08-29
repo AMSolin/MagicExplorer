@@ -6,7 +6,6 @@ import uuid
 
 def get_content():
     display_toasts()
-
     df_lists = get_lists().assign(open=False)
     if 'current_list_id' not in st.session_state:
         st.session_state.current_list_id = df_lists.iloc[0].loc['list_id']
@@ -14,37 +13,26 @@ def get_content():
     df_lists.loc[mask_list, 'open'] = True
 
     def check_match_selected_card_and_set(active_tab, card_key):
-        card_key_cols = ['set_code', 'card_number', 'language', 'card_uuid']
-        result = (st.session_state.get('v_tab_bar', None) == active_tab) \
-        and ('selected_set' in st.session_state) \
-        and (
-            st.session_state[card_key].loc[card_key_cols] \
-                .apply(lambda x: x if isinstance(x, str) else x.hex()) \
-                .values != st.session_state.selected_set.split(' ')
-        ).any()
+        result = (st.session_state.get('v_tab_bar') == active_tab) \
+        and ((card_info := st.session_state.get(card_key)) is not None) \
+        and (selected_set := st.session_state.get('v_selected_set')) \
+        and (card_info.loc['set_code'] != selected_set.split(' ')[0]) \
+        and (int(card_info.loc['create_ns']) <= int(selected_set.split(' ')[-1]))
         return result
-            
+
     if 'selected_card' not in st.session_state:
         st.session_state.selected_card = None
     elif check_match_selected_card_and_set('Edit card', 'selected_card'):
-        _, _, language, card_uuid = st.session_state.selected_set.split(' ')
+        _, _, language, card_uuid, _ = st.session_state.v_selected_set.split(' ')
         columns = ['language', 'card_uuid']
         values = [language, uuid.UUID(card_uuid).bytes]
         update_table_content('list', st.session_state.selected_card, columns, values)
+        del st.session_state.v_selected_set
     elif check_match_selected_card_and_set('Add cards', 'searched_card'):
-        mask = (
-            st.session_state.df_set_codes[
-                ['set_code', 'card_number', 'language', 'card_uuid']
-            ] \
-            .assign(
-                card_uuid=st.session_state.df_set_codes['card_uuid']
-                    .apply(lambda x: x.hex())
-            ) \
-            .values == st.session_state.selected_set.split(' ')
-        ).all(1)
-        st.session_state.searched_card = st.session_state.df_set_codes \
-            .loc[mask].iloc[0]
-        st.session_state.searched_card['list_id'] = st.session_state.current_list_id
+        _, _, language, card_uuid, _ = st.session_state.v_selected_set.split(' ')
+        st.session_state.searched_card = search_set_by_name(
+            'ignore_name', language, card_uuid
+        ).iloc[0]
     
     with st.sidebar:
         table_container = st.container()
@@ -119,11 +107,12 @@ def get_content():
     list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:
-        df_list_content = get_list_content(st.session_state.current_list_id).assign(open=False)
+        df_list_content = get_list_content(st.session_state.current_list_id) \
+            .assign(open=False)
         card_id_cols = [
             'list_id', 'card_uuid', 'condition_code', 'foil', 'language',
             'qnty', 'name', 'keyrune_code', 'set_name',
-            'set_code', 'card_number', 'language_code'
+            'set_code', 'card_number', 'language_code', 'create_ns'
         ]
         if st.session_state.selected_card is not None:
             mask = (df_list_content[card_id_cols[:5]] == st.session_state.selected_card[:5]).all(1)
@@ -148,8 +137,8 @@ def get_content():
                         ].iloc[ix]
                     else:
                         st.session_state.selected_card = None
-                    if 'selected_set' in st.session_state:
-                        del st.session_state.selected_set
+                    if 'v_selected_set' in st.session_state:
+                        del st.session_state.v_selected_set
                     del st.session_state.v_tab_bar
                     return
                 update_table_content('list', df_list_content.iloc[ix], column, value)
@@ -241,28 +230,30 @@ def get_content():
             default=default_tab,
             key='v_tab_bar'
         )
-        
-        def render_card_prop_tab(selected_card):
+
+        def render_card_prop_tab(selected_card, callback_function):
             if isinstance(selected_card, list):
                 selected_card_name = selected_card[0]
                 selected_card_language = selected_card[1]
             else:
                 selected_card_name = selected_card['name']
                 selected_card_language = selected_card['language']
-            st.session_state.df_set_codes = search_set_by_name(
+            df_set_codes = st.session_state.df_set_codes = search_set_by_name(
                 selected_card_name,
                 selected_card_language
             )
             if isinstance(selected_card, list):
                 selected_card = st.session_state.searched_card = \
-                    st.session_state.df_set_codes.iloc[0]
-                selected_card['list_id'] = st.session_state.current_list_id
-            sets_dict = generate_set_dict(
-                st.session_state.df_set_codes,
-                selected_card=selected_card
-            )
+                    df_set_codes[
+                        (df_set_codes['name'] == selected_card_name) &
+                        (df_set_codes['language'] == selected_card_language)
+                    ].iloc[0]
+
+            sets_dict = generate_set_dict(df_set_codes, selected_card)
+
             css = generate_css_set_icons(sets_dict)
-            _ = click_detector(css, key='selected_set')
+
+            _ = click_detector(css, key='v_selected_set')
  
             st.markdown(
                 f"Set:&nbsp;&nbsp;**{selected_card['set_name']}**"
@@ -279,7 +270,7 @@ def get_content():
                 key='v_card_language',
                 options=list_of_languages,
                 index=current_language,
-                on_change=update_table_content_wrapper,
+                on_change=callback_function,
                 kwargs={
                     'entity': 'list',
                     'card_id': selected_card,
@@ -288,8 +279,9 @@ def get_content():
                 }
             )
 
-            df_numbers = search_all_numbers_by_card_number(
-                selected_card.loc['card_number'],
+            df_numbers = search_card_numbers(
+                selected_card.loc['card_uuid'].hex(),
+                selected_card.loc['language'],
                 selected_card.loc['set_code']
             )
             current_number = int(
@@ -307,7 +299,7 @@ def get_content():
                 kwargs['value'] = dict(df_numbers.values)[
                     st.session_state.v_card_number
                 ]
-                update_table_content(**kwargs)
+                callback_function(**kwargs)
             
             _ = st.radio(
                 'Card number:',
@@ -326,12 +318,12 @@ def get_content():
             _ = st.toggle(
                 '**:rainbow-background[Foil]**',
                 key='v_foil_toggle',
-                on_change=update_table_content_wrapper,
+                on_change=callback_function,
                 kwargs={
                     'entity': 'list',
                     'card_id':selected_card,
                     'column': 'foil',
-                    'value': 'st.session_state.v_foil_toggle',
+                    'value': 'int(st.session_state.v_foil_toggle)',
                 }
             )
 
@@ -344,7 +336,7 @@ def get_content():
                 options=list_of_conditions,
                 index=current_condition_id,
                 key='v_card_condition',
-                on_change=update_table_content_wrapper,
+                on_change=callback_function,
                 kwargs={
                     'entity': 'list',
                     'card_id':selected_card,
@@ -352,6 +344,30 @@ def get_content():
                     'value': 'st.session_state.v_card_condition',
                 }
             )
+        
+        def render_card_img_tab(card_props):
+            if card_props.get('card_faces'):
+                labels = ['First', 'Second'] if card_props.get('image_uris') \
+                    else ['Front', 'Back']
+                side = img_col.radio(
+                    'no label',
+                    labels,
+                    label_visibility='collapsed', 
+                    horizontal=True
+                )
+                side_idx = 0 if side in ['Front', 'First'] else 1
+                img_uri = card_props \
+                    .get('card_faces', [{}])[side_idx] \
+                        .get('image_uris', {}) \
+                            .get(
+                                'normal',
+                                card_props.get('image_uris', {}).get('normal')
+                            )
+                st.image(img_uri)
+            else:
+                side_idx = -1
+                st.image(card_props['image_uris']['normal'])
+            return side_idx
         
         if collection_active_tab == 'Collection info':
             col_owner, col_creation_date = st.columns([0.8, 0.2])
@@ -409,12 +425,14 @@ def get_content():
                     'value': 'st.session_state.v_list_note'
                 }
             )
-        
+
         if collection_active_tab == 'Add cards':
             st.session_state.selected_card = None
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
+
             def reset_searchbar():
                 del st.session_state.v_searched_card
+
             exact_match = exact_seach_box.checkbox(
                 'Exact match',
                 value=False,
@@ -423,57 +441,90 @@ def get_content():
             searh_function = to_lower_and_exact_search if exact_match \
                 else to_lower_and_substring_search
             with search_bar:
-                searched_card_name = st_searchbox(
+                searched_card_list = st_searchbox(
                     search_function=searh_function,
                     placeholder="Enter card name",
                     key="v_searched_card",
                     clearable=True
                 )
+            
+            def update_searched_card(entity, card_id, column, value):
+                """
+                Callback fucntion for update searching card in
+                "Add cards" tab
+                """
+                if isinstance(value, str) and 'session_state' in value:
+                    card_id[column] = eval(value)
+                else:
+                    card_id[column] = value
+                if column not in ['foil', 'condition_code']:
+                    # When card_uuid is changed
+                    st.session_state.searched_card = search_set_by_name(
+                        'ignore_name',
+                        card_id['language'],
+                        card_id['card_uuid'].hex()
+                    ).iloc[0]
+            
             img_col, prop_col =  st.columns((0.5, 0.5))
-            if searched_card_name:
-                if 'searched_card' in st.session_state and \
-                    searched_card_name == st.session_state.searched_card.loc[['name', 'language']].to_list():
-                    searched_card_name = st.session_state.searched_card
+            if searched_card_list:
+                # Workaround for realize callback function in serchbox
+                # We want to know, when widget value has changed
+                is_new_search = False
+                if st.session_state.get('prev_searched_card_list', []) != searched_card_list:
+                    is_new_search = True
+                    st.session_state.prev_searched_card_list = searched_card_list
+                
                 with prop_col:
-                    render_card_prop_tab(searched_card_name)
+                    if 'searched_card' in st.session_state and not is_new_search:
+                        render_card_prop_tab(
+                            st.session_state.searched_card,
+                            update_searched_card
+                        )
+                    else:
+                        render_card_prop_tab(
+                            searched_card_list,
+                            update_searched_card
+                        )
+                
                 with img_col:
-                    pass
+                    card_api_key = st.session_state.searched_card \
+                        .loc[['set_code', 'card_number', 'language_code']] \
+                        .to_list()
+                    card_props = get_card_properties(*card_api_key)
+                    side_idx = render_card_img_tab(card_props)
+                
+                with st.form('add card submit form'):
+                    qnty_col, button_col = st.columns(2)
+                    qnty = qnty_col.number_input(
+                        label='Choose quantity:',
+                        min_value=1, max_value=99, step=1
+                    )
+                    button_col.write('')
+                    if button_col.form_submit_button('Add to collection'):
+                        st.session_state.selected_card['list_id'] =  \
+                            st.session_state.current_list_id
+                        st.session_state.selected_card['qnty'] = qnty
+                        update_table_content(
+                            'list', st.session_state.selected_card, 'qnty', qnty
+                        )
 
         if collection_active_tab in collection_tabs[2:]:
             img_col, prop_col =  st.columns((0.5, 0.5))
-            card_api_key = [val for val in st.session_state.selected_card[-3:].values]
+            card_api_key = st.session_state.selected_card \
+                .loc[['set_code', 'card_number', 'language_code']] \
+                .to_list()
             card_props = get_card_properties(*card_api_key)
-            img_container = img_col.container()
-            if card_props.get('card_faces'):
-                labels = ['First', 'Second'] if card_props.get('image_uris') \
-                     else ['Front', 'Back']
-                side = img_col.radio(
-                    'no label',
-                    labels,
-                    label_visibility='collapsed', 
-                    horizontal=True
-                )
-                ix = 0 if side in ['Front', 'First'] else 1
-                img_uri = card_props \
-                    .get('card_faces', [{}])[ix] \
-                        .get('image_uris', {}) \
-                            .get(
-                                'normal',
-                                card_props.get('image_uris', {}).get('normal')
-                            )
-                img_container.image(img_uri)
-            else:
-                ix = -1
-                img_container.image(card_props['image_uris']['normal'])
+            with img_col:
+                side_idx = render_card_img_tab(card_props)
             if collection_active_tab == 'Card overview':
-                def get_card_prop(props_dict, prop_name, side_ix):
+                def get_card_prop(props_dict, prop_name, side_idx):
                     value = props_dict \
-                        .get('card_faces', [{}])[side_ix] \
+                        .get('card_faces', [{}])[side_idx] \
                         .get(prop_name, props_dict.get(prop_name))
                     return value
-                if get_card_prop(card_props, 'power', ix):
-                    power = get_card_prop(card_props, 'power', ix)
-                    toughness = get_card_prop(card_props, 'toughness', ix)
+                if get_card_prop(card_props, 'power', side_idx):
+                    power = get_card_prop(card_props, 'power', side_idx)
+                    toughness = get_card_prop(card_props, 'toughness', side_idx)
                     card_props['P/T'] =  \
                         f'{power}/{toughness}'.replace("*", " ★ ")
                 list_legalities = [
@@ -500,7 +551,7 @@ def get_content():
                 text_field = ''
                 skip_next_property = False
                 for property, alias in props_aliases:
-                    property_value = get_card_prop(card_props, property, ix)
+                    property_value = get_card_prop(card_props, property, side_idx)
                     if skip_next_property:
                         skip_next_property = False
                         continue
@@ -533,9 +584,7 @@ def get_content():
                     }
                 )
                 with prop_col:
-                    render_card_prop_tab(st.session_state.selected_card)
-
-
-
-
-
+                    render_card_prop_tab(
+                        st.session_state.selected_card,
+                        update_table_content_wrapper
+                    )

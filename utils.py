@@ -103,12 +103,15 @@ def search_card_by_name(substr_card: str):
         result = []
     return result
 
-@st.cache_data
 def search_set_by_name(
-    card_name: str, card_lang: str
+    card_name: str, card_lang: str, card_uuid: str=None
 ):
     csr = Db('app_data.db')
     card_name = card_name.replace("'", "''")
+    if card_uuid is not None:
+        card_condition = f"c.card_uuid = X'{card_uuid}'"
+    else:
+        card_condition = f"c.name = '{card_name}'"
 
     if card_lang in ['English', 'Phyrexian']:
         query = f"""
@@ -132,25 +135,27 @@ def search_set_by_name(
             left join languages as l
                 on c.language = l.language
             where
-                c.name = '{card_name}'
+                {card_condition}
                 and c.language in ('English', 'Phyrexian')
                 and coalesce(c.side, 'a') = 'a'
             order by s.release_date desc, cast(c.number as int)
         """
-    else :
+    else:
+        # TODO missing prints, those does not have eng version,
+        # like spanish Mana Leak at set Salvat 2011
         query = f"""
             with foreing_cards as (
                 select
                     name,
                     language,
                     card_uuid
-                from foreign_data
+                from foreign_data as c
                 where
-                    name = '{card_name}' and
-                    language = '{card_lang}'
+                    {card_condition}
+                    and language = '{card_lang}'
             )
             select
-                c.name,
+                coalesce(f.name, c.name) as name,
                 c.set_code,
                 lower(s.keyrune_code) as keyrune_code,
                 s.name as set_name,
@@ -185,16 +190,17 @@ def search_set_by_name(
                 on coalesce(f.language, c.language) = l.language
             where
                 coalesce(c.side, 'a') = 'a'
+                {'' if card_uuid is None else f"and {card_condition}"}
             order by s.release_date desc, cast(c.number as int)
         """
-    result = csr.read_sql(query)
+    result = csr.read_sql(query).assign(create_ns = str(time.time_ns()))
     return result
 
-def search_all_numbers_by_card_number(card_number, card_set_code):
+def search_card_numbers(card_uuid, card_language, card_set_code):
     csr = Db('app_data.db')
     result = csr.read_sql(
     f"""
-        select
+        select distinct
             c.number as card_number,
             c.card_uuid
         from cards as c
@@ -202,13 +208,24 @@ def search_all_numbers_by_card_number(card_number, card_set_code):
             select name
             from cards
             where
-                set_code = '{card_set_code}'
-                and number = '{card_number}'
+                card_uuid = X'{card_uuid}'
                 and coalesce(side, 'a') = 'a'
         ) as n
             on c.name = n.name
+        left join (
+            select
+                card_uuid,
+                language
+            from foreign_data
+            where card_uuid = X'{card_uuid}'
+        ) as f
+            on c.card_uuid = f.card_uuid
         where
             c.set_code = '{card_set_code}'
+            and (
+                c.language = '{card_language}'
+                or f.language = '{card_language}'
+            )
             and coalesce(c.side, 'a') = 'a'
         order by cast(c.number as int)
     """)
@@ -239,29 +256,29 @@ def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None)
     sets_dict = {}
     df_set_codes = df_set_codes \
         [df_set_codes['row_number'] == 1] \
-        [['set_code', 'keyrune_code', 'card_number', 'language', 'card_uuid']]
+        [['set_code', 'keyrune_code', 'card_number', 'language', 'card_uuid', 'create_ns']]
     if selected_card is not None:
-        st.session_state.selected_set = ' '.join(
-            selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid']] \
+        st.session_state.v_selected_set = ' '.join(
+            selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid', 'create_ns']] \
                 .apply(lambda x: x if isinstance(x, str) else x.hex()).values
         )
     for row in df_set_codes.itertuples():
-        idx, set_code, keyrune_code, card_number, language, card_uuid = row
-        css_id = f'{set_code} {card_number} {language} {card_uuid.hex()}'
-        if 'selected_set' not in st.session_state and idx == 0:
-            st.session_state.selected_set = css_id
+        idx, set_code, keyrune_code, card_number, language, card_uuid, create_ns = row
+        css_id = f'{set_code} {card_number} {language} {card_uuid.hex()} {create_ns}'
+        if 'v_selected_set' not in st.session_state and idx == 0:
+            st.session_state.v_selected_set = css_id
         sets_dict[css_id] = f'<a id="{css_id}" class="ss ss-{keyrune_code} ss-2x"></a> '
     return sets_dict
 
 def generate_css_set_icons(sets_dict):
     css = '<link href="//cdn.jsdelivr.net/npm/keyrune@latest/css/keyrune.css" rel="stylesheet" type="text/css" />'
     for css_id, set_css in sets_dict.items():
-        if css_id.split(' ')[0] == st.session_state.selected_set.split(' ')[0]:
+        if css_id.split(' ')[0] == st.session_state.v_selected_set.split(' ')[0]:
             set_css = f'<span style="color: orange">{set_css}</span>'
         css+= set_css
     return css
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def get_card_properties(set_code, card_number, lang):
     api_url = 'https://api.scryfall.com/cards'
     r = requests.get(f'{api_url}/{set_code.lower()}/{card_number}/{lang}').text
@@ -346,7 +363,7 @@ def get_list_content(list_id):
             and coalesce(ca.side, 'a') = 'a'
         order by ca.name
     """)
-    result['create_ns'] = time.time_ns()
+    result['create_ns'] = str(time.time_ns())
     return result
 
 def get_deck_content(deck_id):
@@ -506,8 +523,6 @@ def update_table_content(entity, card_id, column, value):
             card_dict[column] = value
             st.session_state.selected_card[column] = value
             st.session_state.selected_card.rename('need_update', inplace=True)
-        if 'selected_set' in st.session_state:
-            del st.session_state.selected_set
     if not ((column == 'qnty') and (value == 0)):
         #Если не устанаваливали qnty = 0
         if column != 'qnty':
