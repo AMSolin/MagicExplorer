@@ -518,11 +518,9 @@ def update_table_content(entity, card_id, column, value):
             for i in range(len(column)):
                 card_dict[column[i]] = value[i]
                 st.session_state.selected_card[column[i]] = value[i]
-            st.session_state.selected_card.rename('need_update', inplace=True)
         else:
             card_dict[column] = value
             st.session_state.selected_card[column] = value
-            st.session_state.selected_card.rename('need_update', inplace=True)
     if not ((column == 'qnty') and (value == 0)):
         #Если не устанаваливали qnty = 0
         if column != 'qnty':
@@ -532,6 +530,7 @@ def update_table_content(entity, card_id, column, value):
         else:
             #Иначе в случае конфликта обновим значение qnty
             add_method = 'excluded.qnty'
+            card_dict[column] = value
         csr.execute(
         f"""
             insert into {entity}_content (

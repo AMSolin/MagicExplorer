@@ -27,6 +27,7 @@ def get_content():
         columns = ['language', 'card_uuid']
         values = [language, uuid.UUID(card_uuid).bytes]
         update_table_content('list', st.session_state.selected_card, columns, values)
+        st.session_state.selected_card.rename('need_update', inplace=True)
         del st.session_state.v_selected_set
     elif check_match_selected_card_and_set('Add cards', 'searched_card'):
         _, _, language, card_uuid, _ = st.session_state.v_selected_set.split(' ')
@@ -145,6 +146,9 @@ def get_content():
             else:
                 # Если фунция была вызвана при изменении виджета
                 update_table_content(**kwargs)
+                if kwargs['card_id'] is st.session_state.get('selected_card'):
+                    st.session_state.selected_card \
+                        .rename('need_update', inplace=True)
         
         _ = st.data_editor(
             df_list_content,
