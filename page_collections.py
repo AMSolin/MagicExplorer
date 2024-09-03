@@ -19,9 +19,13 @@ def get_content():
         and (card_info.loc['set_code'] != selected_set.split(' ')[0]) \
         and (int(card_info.loc['create_ns']) <= int(selected_set.split(' ')[-1]))
         return result
-
-    if 'selected_card' not in st.session_state:
-        st.session_state.selected_card = None
+    
+    if ('selected_card' not in st.session_state) or \
+        (
+            (st.session_state.get('selected_card') is not None) and
+            (st.session_state.get('v_tab_bar') not in ['Card overview', 'Edit card'])
+        ):
+            st.session_state.selected_card = None
     elif check_match_selected_card_and_set('Edit card', 'selected_card'):
         _, _, language, card_uuid, _ = st.session_state.v_selected_set.split(' ')
         columns = ['language', 'card_uuid']
@@ -140,7 +144,7 @@ def get_content():
                         st.session_state.selected_card = None
                     if 'v_selected_set' in st.session_state:
                         del st.session_state.v_selected_set
-                    del st.session_state.v_tab_bar
+                    st.session_state.v_tab_bar = 'Card overview'
                     return
                 update_table_content('list', df_list_content.iloc[ix], column, value)
             else:
@@ -431,7 +435,6 @@ def get_content():
             )
 
         if collection_active_tab == 'Add cards':
-            st.session_state.selected_card = None
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
 
             def reset_searchbar():
