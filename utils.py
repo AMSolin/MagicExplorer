@@ -476,7 +476,10 @@ def delete_record(entity: str, name: str):
             f'{entity.capitalize()} {name} was deleted!'
         )
 
-def update_table(entity, id, column, value, default_value=None, db_path='user_data.db'):
+def update_table(
+        entity, id, column, value=None, default_value=None, 
+        db_path='user_data.db'
+    ):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     if isinstance(value, datetime.date):

@@ -52,13 +52,10 @@ def get_content():
                 st.session_state.current_list_id = df_lists.iloc[ix].loc['list_id']
                 st.session_state.v_tab_bar = None
                 st.session_state.selected_card = None
-            elif not ((col == 'is_default_list') and (val is False)):
-                default_list = df_lists.iloc[ix].loc['name']
+            elif not ((col == 'open') & (val is False)):
                 list_id = df_lists.iloc[ix].loc['list_id']
                 try:
-                    update_table(
-                        'list', list_id, col, val, default_value=default_list
-                    )
+                    update_table('list', list_id, col, val)
                 except sqlite3.IntegrityError:
                      table_container.error(f'Collection {val} already exist!')  
 
@@ -68,10 +65,9 @@ def get_content():
             hide_index=True,
             column_config={
                 'name': 'Collection',
-                'is_default_list': st.column_config.CheckboxColumn('Default'),
-                'open': st.column_config.CheckboxColumn('Open'),
+                'open': st.column_config.CheckboxColumn('Open')
             },
-            column_order=['name', 'is_default_list', 'open'],
+            column_order=['name', 'open'],
             on_change=list_callback
         )
         
@@ -87,11 +83,11 @@ def get_content():
                 col2.write('')
                 col2.write('')
                 submitted = col2.form_submit_button('Add')
-                default_flag = st.checkbox('Set as default collection')
+                default_flag = st.checkbox('Set as main collection')
                 if submitted and new_list.strip() != '':
                     try:
                         add_new_record('list', new_list, is_default=default_flag)
-                        st.experimental_rerun()
+                        st.rerun()
                     except sqlite3.IntegrityError:
                         st.error(f'Collection {new_list} already exist!')
         elif (action == 'Delete') and (df_lists.shape[0] > 1):
@@ -108,7 +104,7 @@ def get_content():
                 if submitted:
                     delete_record('list', deleted_list)
                     del st.session_state.current_list_id
-                    st.experimental_rerun()
+                    st.rerun()
     list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:
@@ -190,12 +186,16 @@ def get_content():
         )
     with overview_side:
 
-        list_name, creation_dtm, note, player_id, owner = df_lists \
-            .loc[
-                mask_list,
-                ['name', 'creation_date', 'note', 'player_id', 'owner']
-            ] \
-            .values.ravel()
+        list_name, creation_dtm, note, player_id, owner, is_default_list =  \
+            df_lists \
+                .loc[
+                    mask_list,
+                    [
+                        'name', 'creation_date', 'note', 'player_id', 'owner',
+                        'is_default_list'
+                    ]
+                ] \
+                .values.ravel()
         
         def update_table_wrapper(**kwargs):
             try:
@@ -378,7 +378,9 @@ def get_content():
             return side_idx
         
         if collection_active_tab == 'Collection info':
-            col_owner, col_creation_date = st.columns([0.8, 0.2])
+            col_owner, col_creation_date, col_default_list = st.columns(
+                    [0.4, 0.3, 0.3]
+                )
 
             df_players = get_players()[['player_id', 'name']]
             if owner is not None:
@@ -415,6 +417,21 @@ def get_content():
                     'id': st.session_state.current_list_id,
                     'column': 'creation_date',
                     'value': 'st.session_state.v_creation_date'
+                }
+            )
+            col_default_list.write('')
+            col_default_list.write('')
+            _ = col_default_list.checkbox(
+                'Main collection',
+                disabled=bool(is_default_list),
+                value=is_default_list,
+                key='v_is_default_list',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'id': st.session_state.current_list_id,
+                    'column': 'is_default_list',
+                    'default_value': list_name
                 }
             )
 
