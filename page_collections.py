@@ -1,7 +1,7 @@
 import streamlit as st
-from st_click_detector import click_detector
 from streamlit_searchbox import st_searchbox
 from utils import *
+from card_tabs import render_card_img_tab, render_card_prop_tab
 import uuid
 
 def get_content():
@@ -64,7 +64,10 @@ def get_content():
             key='v_lists',
             hide_index=True,
             column_config={
-                'name': 'Collection',
+                'name': st.column_config.TextColumn(
+                    'Collection',
+                    width='medium'
+                ),
                 'open': st.column_config.CheckboxColumn('Open')
             },
             column_order=['name', 'open'],
@@ -239,144 +242,6 @@ def get_content():
             key='v_tab_bar'
         )
 
-        def render_card_prop_tab(selected_card, callback_function):
-            if isinstance(selected_card, list):
-                selected_card_name = selected_card[0]
-                selected_card_language = selected_card[1]
-            else:
-                selected_card_name = selected_card['name']
-                selected_card_language = selected_card['language']
-            df_set_codes = st.session_state.df_set_codes = search_set_by_name(
-                selected_card_name,
-                selected_card_language
-            )
-            if isinstance(selected_card, list):
-                selected_card = st.session_state.searched_card = \
-                    df_set_codes[
-                        (df_set_codes['name'] == selected_card_name) &
-                        (df_set_codes['language'] == selected_card_language)
-                    ].iloc[0]
-
-            sets_dict = generate_set_dict(df_set_codes, selected_card)
-
-            css = generate_css_set_icons(sets_dict)
-
-            _ = click_detector(css, key='v_selected_set')
- 
-            st.markdown(
-                f"Set:&nbsp;&nbsp;**{selected_card['set_name']}**"
-            )
-
-            list_of_languages = search_languages_by_card_uuid(
-                selected_card.loc['card_uuid'].hex()
-            )
-            current_language = list_of_languages.index(
-                selected_card['language']
-            )
-            _ = st.selectbox(
-                'Language:',
-                key='v_card_language',
-                options=list_of_languages,
-                index=current_language,
-                on_change=callback_function,
-                kwargs={
-                    'entity': 'list',
-                    'card_id': selected_card,
-                    'column': 'language',
-                    'value': 'st.session_state.v_card_language',
-                }
-            )
-
-            df_numbers = search_card_numbers(
-                selected_card.loc['card_uuid'].hex(),
-                selected_card.loc['language'],
-                selected_card.loc['set_code']
-            )
-            current_number = int(
-                df_numbers[
-                    df_numbers['card_number'] == selected_card['card_number']
-                ].index[0]
-            )
-
-            def card_number_to_uuid(**kwargs):
-                """
-                Workaround for cases, when user select set with same 
-                card number(s) as in previous set, which lead to unexpected 
-                trigger card number widget with build-in format function.
-                """
-                kwargs['value'] = dict(df_numbers.values)[
-                    st.session_state.v_card_number
-                ]
-                callback_function(**kwargs)
-            
-            _ = st.radio(
-                'Card number:',
-                horizontal=True,
-                key='v_card_number',
-                options=df_numbers['card_number'],
-                index=current_number,
-                on_change=card_number_to_uuid,
-                kwargs={
-                    'entity': 'list',
-                    'card_id':selected_card,
-                    'column': 'card_uuid'
-                }
-            )
-
-            _ = st.toggle(
-                '**:rainbow-background[Foil]**',
-                key='v_foil_toggle',
-                on_change=callback_function,
-                kwargs={
-                    'entity': 'list',
-                    'card_id':selected_card,
-                    'column': 'foil',
-                    'value': 'int(st.session_state.v_foil_toggle)',
-                }
-            )
-
-            list_of_conditions = ['NM', 'SP', 'MP', 'HP', 'D']
-            current_condition_id = list_of_conditions.index(
-                selected_card['condition_code']
-            )
-            _ = st.selectbox(
-                'Condition:',
-                options=list_of_conditions,
-                index=current_condition_id,
-                key='v_card_condition',
-                on_change=callback_function,
-                kwargs={
-                    'entity': 'list',
-                    'card_id':selected_card,
-                    'column': 'condition_code',
-                    'value': 'st.session_state.v_card_condition',
-                }
-            )
-        
-        def render_card_img_tab(card_props):
-            if card_props.get('card_faces'):
-                labels = ['First', 'Second'] if card_props.get('image_uris') \
-                    else ['Front', 'Back']
-                side = img_col.radio(
-                    'no label',
-                    labels,
-                    label_visibility='collapsed', 
-                    horizontal=True
-                )
-                side_idx = 0 if side in ['Front', 'First'] else 1
-                img_uri = card_props \
-                    .get('card_faces', [{}])[side_idx] \
-                        .get('image_uris', {}) \
-                            .get(
-                                'normal',
-                                card_props.get('image_uris', {}).get('normal')
-                            )
-                st.image(img_uri)
-            else:
-                side_idx = -1
-                st.image(card_props['image_uris']['normal'])
-            return side_idx
-        
         if collection_active_tab == 'Collection info':
             col_owner, col_creation_date, col_default_list = st.columns(
                     [0.4, 0.3, 0.3]
@@ -509,6 +374,36 @@ def get_content():
                             searched_card_list,
                             update_searched_card
                         )
+                    
+                    with st.form('add card submit form'):
+                        card_uuid, condition_code, foil, language = st \
+                            .session_state.searched_card \
+                            .loc[['card_uuid', 'condition_code', 'foil', 'language']]
+                        
+                            
+                        current_qnty = df_list_content[
+                                (df_list_content['card_uuid'] == card_uuid) &
+                                (df_list_content['condition_code'] == condition_code) &
+                                (df_list_content['foil'] == foil) &
+                                (df_list_content['language'] == language)
+                            ] \
+                            ['qnty'].sum()
+                        
+                        qnty = st.number_input(
+                            label='Enter quantity:',
+                            value=current_qnty,
+                            min_value=0, max_value=99, step=1
+                        )
+                        st.write('')
+                        if st.form_submit_button('Update collection'):
+                            st.session_state.searched_card['list_id'] = \
+                                st.session_state.current_list_id
+                            st.session_state.searched_card['qnty'] = qnty
+                            update_table_content(
+                                'list', st.session_state.searched_card,
+                                'qnty', qnty
+                            )
+                            st.rerun()
                 
                 with img_col:
                     card_api_key = st.session_state.searched_card \
@@ -517,20 +412,6 @@ def get_content():
                     card_props = get_card_properties(*card_api_key)
                     side_idx = render_card_img_tab(card_props)
                 
-                with st.form('add card submit form'):
-                    qnty_col, button_col = st.columns(2)
-                    qnty = qnty_col.number_input(
-                        label='Choose quantity:',
-                        min_value=1, max_value=99, step=1
-                    )
-                    button_col.write('')
-                    if button_col.form_submit_button('Add to collection'):
-                        st.session_state.selected_card['list_id'] =  \
-                            st.session_state.current_list_id
-                        st.session_state.selected_card['qnty'] = qnty
-                        update_table_content(
-                            'list', st.session_state.selected_card, 'qnty', qnty
-                        )
 
         if collection_active_tab in collection_tabs[2:]:
             img_col, prop_col =  st.columns((0.5, 0.5))
