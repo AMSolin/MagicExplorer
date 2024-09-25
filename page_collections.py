@@ -52,7 +52,7 @@ def get_content():
                 st.session_state.current_list_id = df_lists.iloc[ix].loc['list_id']
                 st.session_state.v_tab_bar = None
                 st.session_state.selected_card = None
-            elif not ((col == 'open') & (val is False)):
+            else:
                 list_id = df_lists.iloc[ix].loc['list_id']
                 try:
                     update_table('list', list_id, col, val)
@@ -86,7 +86,7 @@ def get_content():
                 col2.write('')
                 col2.write('')
                 submitted = col2.form_submit_button('Add')
-                default_flag = st.checkbox('Set as main collection')
+                default_flag = st.checkbox('Mark as primary collection')
                 if submitted and new_list.strip() != '':
                     try:
                         add_new_record('list', new_list, is_default=default_flag)
@@ -103,11 +103,15 @@ def get_content():
                 col2.write('')
                 col2.write('')
                 submitted = col2.form_submit_button('Drop')
-                st.write('All cards from deleting collection will be also removed!')
+                st.warning(
+                    'All cards from deleting collection will be also removed!',
+                    icon='⚠️'
+                )
                 if submitted:
                     delete_record('list', deleted_list)
                     del st.session_state.current_list_id
                     st.rerun()
+    
     list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:
@@ -119,7 +123,10 @@ def get_content():
             'set_code', 'card_number', 'language_code', 'create_ns'
         ]
         if st.session_state.selected_card is not None:
-            mask = (df_list_content[card_id_cols[:5]] == st.session_state.selected_card[:5]).all(1)
+            mask = (
+                df_list_content[card_id_cols[:5]] == \
+                    st.session_state.selected_card[:5]
+            ).all(1)
             df_list_content.loc[mask, 'open'] = True
             if st.session_state.selected_card.name == 'need_update':
                 st.session_state.selected_card.name = ''
@@ -139,11 +146,12 @@ def get_content():
                         st.session_state.selected_card = df_list_content[
                             card_id_cols
                         ].iloc[ix]
+                        st.session_state.v_tab_bar = 'Card overview'
                     else:
                         st.session_state.selected_card = None
+                        st.session_state.v_tab_bar = 'Collection info'
                     if 'v_selected_set' in st.session_state:
                         del st.session_state.v_selected_set
-                    st.session_state.v_tab_bar = 'Card overview'
                     return
                 update_table_content('list', df_list_content.iloc[ix], column, value)
             else:
@@ -168,6 +176,7 @@ def get_content():
                 'name':'Name',
                 'card_number': None,
                 'type': 'Type',
+                'set_code': 'Set',
                 'language_code': None,
                 'set_name': None,
                 'keyrune_code': None,
@@ -189,16 +198,16 @@ def get_content():
         )
     with overview_side:
 
-        list_name, creation_dtm, note, player_id, owner, is_default_list =  \
-            df_lists \
-                .loc[
-                    mask_list,
-                    [
-                        'name', 'creation_date', 'note', 'player_id', 'owner',
-                        'is_default_list'
-                    ]
-                ] \
-                .values.ravel()
+        list_name, creation_dtm, note, player_id, \
+        owner, is_default_list, is_wish_list =  df_lists \
+            .loc[
+                mask_list,
+                [
+                    'name', 'creation_date', 'note', 'player_id',
+                    'owner', 'is_default_list', 'is_wish_list'
+                ]
+            ] \
+            .values.ravel()
         
         def update_table_wrapper(**kwargs):
             try:
@@ -243,9 +252,7 @@ def get_content():
         )
 
         if collection_active_tab == 'Collection info':
-            col_owner, col_creation_date, col_default_list = st.columns(
-                    [0.4, 0.3, 0.3]
-                )
+            col_owner, col_creation_date = st.columns([0.6, 0.4])
 
             df_players = get_players()[['player_id', 'name']]
             if owner is not None:
@@ -284,10 +291,8 @@ def get_content():
                     'value': 'st.session_state.v_creation_date'
                 }
             )
-            col_default_list.write('')
-            col_default_list.write('')
-            _ = col_default_list.checkbox(
-                'Main collection',
+            _ = col_owner.checkbox(
+                'Mark as primary collection',
                 disabled=bool(is_default_list),
                 value=is_default_list,
                 key='v_is_default_list',
@@ -297,6 +302,19 @@ def get_content():
                     'id': st.session_state.current_list_id,
                     'column': 'is_default_list',
                     'default_value': list_name
+                }
+            )
+
+            _ = col_creation_date.checkbox(
+                'Mark as wish list',
+                value=is_wish_list,
+                key='v_is_wish_list',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'list',
+                    'id': st.session_state.current_list_id,
+                    'column': 'is_wish_list',
+                    'value': 'int(st.session_state.v_is_wish_list)'
                 }
             )
 

@@ -1,5 +1,5 @@
 import streamlit as st
-import page_import, page_collections, page_players, page_initialization, page_import_delver_lens
+import page_import, page_collections, page_decks, page_players, page_initialization, page_import_delver_lens
 from utils import *
 
 st.set_page_config(
@@ -34,6 +34,8 @@ def main():
 		page_players.get_content()
 	if choice == 'Collections':
 		page_collections.get_content()
+	if choice == 'Decks':
+		page_decks.get_content()
 	if choice == 'Import':
 		page_import.get_content()
 	if choice == 'Delver Lens import':

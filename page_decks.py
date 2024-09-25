@@ -3,7 +3,6 @@ from utils import *
 
 def get_content():
     display_toasts()
-
     df_decks = get_decks().assign(open=False)
     if 'current_deck_id' not in st.session_state:
         st.session_state.current_deck_id = df_decks.iloc[0].loc['deck_id']
@@ -12,6 +11,7 @@ def get_content():
 
     if 'selected_deck_card' not in st.session_state:
         st.session_state.selected_deck_card = None
+    #TODO big match block
     
     with st.sidebar:
         table_container = st.container()
@@ -27,8 +27,10 @@ def get_content():
                 st.session_state.current_deck_id = df_decks.iloc[ix].loc['deck_id']
             else:
                 deck_id = df_decks.iloc[ix].loc['deck_id']
+                #TODO st.session_state.v_tab_bar = None
+                #TODO st.session_state.selected_deck_card = None
                 try:
-                    update_table('deck', None, deck_id, col, val)
+                    update_table('deck', deck_id, col, val)
                 except sqlite3.IntegrityError:
                         table_container.error(f'Deck {val} already exist!')
 
@@ -37,7 +39,7 @@ def get_content():
             key='v_decks',
             hide_index=True,
             column_config={
-                'name': 'Deck',
+                'name': st.column_config.TextColumn('Deck', width='medium'),
                 'open': st.column_config.CheckboxColumn('Open')
             },
             column_order=['name', 'open'],
@@ -56,9 +58,10 @@ def get_content():
                 col2.write('')
                 col2.write('')
                 submitted = col2.form_submit_button('Add')
+                default_flag = st.checkbox('Mark as primary deck')
                 if submitted and new_deck.strip() != '':
                     try:
-                        add_new_record('deck', new_deck)
+                        add_new_record('deck', new_deck, is_default=default_flag)
                         st.rerun()
                     except sqlite3.IntegrityError:
                         st.error(f'Deck {new_deck} already exist!')
@@ -72,25 +75,38 @@ def get_content():
                 col2.write('')
                 col2.write('')
                 submitted = col2.form_submit_button('Drop')
+                st.warning(
+                    'All cards from deleting deck will be also removed!',
+                    icon='⚠️'
+                )
                 if submitted:
-                    delete_record('list', deck_to_delete)
+                    delete_record('deck', deck_to_delete)
                     del st.session_state.current_deck_id
                     st.rerun()
+        elif (action == 'merge') and (df_decks.shape[0] > 1):
+            pass #TODO merge
+    
     list_side, overview_side = st.columns((0.6, 0.4))
 
     with list_side:
         df_deck_content = get_deck_content(st.session_state.current_deck_id) \
             .assign(open=False)
-        card_cols = [
-            'deck_id', 'card_uuid', 'condition_code', 'foil', 'language', 'deck_type_name'
+        card_id_cols = [
+            'deck_id', 'card_uuid', 'condition_code', 'foil', 'language',
+            'deck_type_name',
             'qnty',
             'set_code', 'card_number', 'language_code'
         ]
-        card_id_cols = card_cols[:6]
-        card_api_cols = card_cols[-3:]
         if st.session_state.selected_deck_card is not None:
-            mask = (df_deck_content[card_id_cols] == st.session_state.selected_deck_card).all(1)
+            mask = (
+                df_deck_content[card_id_cols[:6]] == \
+                    st.session_state.selected_deck_card[:6]
+            ).all(1)
             df_deck_content.loc[mask, 'open'] = True
+            if st.session_state.selected_deck_card.name == 'need_update':
+                st.session_state.selected_deck_card.name = ''
+                st.session_state.selected_deck_card = df_deck_content \
+                    [card_id_cols].loc[mask].iloc[0]
         
         def update_table_content_wrapper(**kwargs):
             if 'value' not in kwargs:
@@ -105,44 +121,76 @@ def get_content():
                         st.session_state.selected_deck_card = df_deck_content[
                             card_id_cols
                         ].iloc[ix]
+                        st.session_state.v_tab_bar = 'Card overview'
                     else:
                         st.session_state.selected_deck_card = None
+                        st.session_state.v_tab_bar = 'Collection info'
+                    if 'v_selected_deck_set' in st.session_state:
+                        del st.session_state.v_selected_deck_set
                     return
                 update_table_content('deck', df_deck_content.iloc[ix], column, value)
             else:
                 # Если фунция была вызвана при изменении виджета
                 update_table_content(**kwargs)
-        
-        _ = st.data_editor(
-            df_deck_content,
-            key='v_deck_content',
-            hide_index=True,
-            column_config={
-                'deck_id': None,
-                'deck_type_name': 'Deck type',
-                'card_uuid': None,
-                'language': None,
-                'qnty': st.column_config.NumberColumn(
-                    'Qnty', min_value=0, max_value=99, step=1
-                ),
-                'name': 'Name', #TODO display in native card language
-                'card_number': None,
-                'type': 'Type', #TODO display in native card language
-                'language_code': None,
-                'set_code': None,
-                'rarity': None,
-                'mana_cost': 'Cost',
-                'foil': st.column_config.CheckboxColumn('Foil'),
-                'condition_code': 'Cond',
-                'create_ns': None,
-                'open': st.column_config.CheckboxColumn('Open'),
-            },
-            disabled=[
-                'name', 'type', 'language_code', 'set_code', 'rarity', 
-                'mana_cost', 'foil', 'condition_code']
-            ,
-            on_change=update_table_content_wrapper
-        )
+                if kwargs['card_id'] is st.session_state.get('selected_deck_card'):
+                    st.session_state.selected_deck_card \
+                        .rename('need_update', inplace=True)
+
+        df_deck_type_info = df_deck_content \
+            .groupby('deck_type_name') \
+            .agg(
+                total_cards=pd.NamedAgg('qnty', sum),
+                distinct_cards=pd.NamedAgg('name', lambda s: s.nunique()),
+            )
+        def render_deck_content_by_type(type: str, alias: str):
+            try:
+                total_cards, distinct_cards = df_deck_type_info \
+                    .loc[type].loc[['total_cards', 'distinct_cards']].to_list()
+            except:
+                total_cards =  distinct_cards  = 0
+            st.subheader(
+                f"{alias} - {total_cards} cards, " +
+                f"{distinct_cards} distinct",
+                divider='red'
+            )
+            if total_cards > 0:
+                _ = st.data_editor(
+                    df_deck_content \
+                        .loc[df_deck_content['deck_type_name'] == type],
+                    key=f'v_deck_content_{type}',
+                    hide_index=True,
+                    column_config={
+                        'deck_id': None,
+                        'deck_type_name': None,
+                        'card_uuid': None,
+                        'language': None,
+                        'qnty': st.column_config.NumberColumn(
+                            'Qnty', min_value=0, max_value=99, step=1
+                        ),
+                        'name': 'Name', #TODO display in native card language
+                        'card_number': None,
+                        'type': 'Type', #TODO display in native card language
+                        'set_code': 'Set',
+                        'language_code': None,
+                        # 'set_code': None,
+                        'rarity': None,
+                        'mana_cost': 'Cost',
+                        'foil': st.column_config.CheckboxColumn('Foil'),
+                        'condition_code': None,
+                        'create_ns': None,
+                        'open': st.column_config.CheckboxColumn('Open'),
+                    },
+                    disabled=[
+                        'name', 'type', 'language_code', 'set_code', 'rarity', 
+                        'mana_cost', 'foil', 'condition_code']
+                    ,
+                    on_change=update_table_content_wrapper
+                )
+            else:
+                st.write('')
+        render_deck_content_by_type('Main', 'Main Deck')
+        render_deck_content_by_type('Side', 'Sideboard')
+        render_deck_content_by_type('Maybe', 'Maybeboard')
     with overview_side:
         deck_tabs =['Deck & cards overview', 'Add cards']
         deck_active_tab = show_tab_bar(deck_tabs)

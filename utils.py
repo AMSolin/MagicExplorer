@@ -318,6 +318,7 @@ def get_lists():
             l.note,
             l.is_default_list,
             l.player_id,
+            l.is_wish_list,
             p.name as owner
         from lists as l
         left join players as p
