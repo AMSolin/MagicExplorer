@@ -39,8 +39,12 @@ def get_content():
             key='v_decks',
             hide_index=True,
             column_config={
-                'name': st.column_config.TextColumn('Deck', width='medium'),
-                'open': st.column_config.CheckboxColumn('Open')
+                'name': st.column_config.TextColumn(
+                    'Deck', width='medium', help='Deck name'
+                ),
+                'open': st.column_config.CheckboxColumn(
+                    'Open', help="Open deck"
+                )
             },
             column_order=['name', 'open'],
             on_change=deck_callback
@@ -94,7 +98,7 @@ def get_content():
         card_id_cols = [
             'deck_id', 'card_uuid', 'condition_code', 'foil', 'language',
             'deck_type_name',
-            'qnty',
+            'qnty', 'is_commander',
             'set_code', 'card_number', 'language_code'
         ]
         if st.session_state.selected_deck_card is not None:
@@ -111,16 +115,17 @@ def get_content():
         def update_table_content_wrapper(**kwargs):
             if 'value' not in kwargs:
                 # Если функция была вызвана при изменении таблицы
+                table_key = eval(kwargs['table'])
                 changes = [
                     (ix, [(column, value) for column, value in pair.items()])
-                    for ix, pair in st.session_state.v_deck_content['edited_rows'].items()
+                    for ix, pair in table_key['edited_rows'].items()
                 ]
                 ix, [[column, value]]= changes[0]
                 if column == 'open':
                     if value == True:
-                        st.session_state.selected_deck_card = df_deck_content[
-                            card_id_cols
-                        ].iloc[ix]
+                        st.session_state.selected_deck_card = \
+                            kwargs['df_deck_type_content'][card_id_cols] \
+                                .iloc[ix]
                         st.session_state.v_tab_bar = 'Card overview'
                     else:
                         st.session_state.selected_deck_card = None
@@ -128,7 +133,13 @@ def get_content():
                     if 'v_selected_deck_set' in st.session_state:
                         del st.session_state.v_selected_deck_set
                     return
-                update_table_content('deck', df_deck_content.iloc[ix], column, value)
+                update_table_content(
+                    'deck', kwargs['df_deck_type_content'].iloc[ix],
+                    column, value
+                )
+                if ((kwargs['df_deck_type_content'].iloc[ix]['open']) and \
+                    (column == 'qnty') and (value == 0)):
+                    st.session_state.selected_card = None
             else:
                 # Если фунция была вызвана при изменении виджета
                 update_table_content(**kwargs)
@@ -154,9 +165,10 @@ def get_content():
                 divider='red'
             )
             if total_cards > 0:
+                deck_type_content = df_deck_content \
+                    .loc[df_deck_content['deck_type_name'] == type]
                 _ = st.data_editor(
-                    df_deck_content \
-                        .loc[df_deck_content['deck_type_name'] == type],
+                    deck_type_content,
                     key=f'v_deck_content_{type}',
                     hide_index=True,
                     column_config={
@@ -165,26 +177,45 @@ def get_content():
                         'card_uuid': None,
                         'language': None,
                         'qnty': st.column_config.NumberColumn(
-                            'Qnty', min_value=0, max_value=99, step=1
+                            'Q', min_value=0, step=1, help='Quantity'
                         ),
-                        'name': 'Name', #TODO display in native card language
+                        'name': st.column_config.TextColumn(
+                            'Name', help='Card name'
+                        ), #TODO display in native card language
                         'card_number': None,
-                        'type': 'Type', #TODO display in native card language
-                        'set_code': 'Set',
+                        'type': st.column_config.TextColumn(
+                            'Type', help='Card type'),
+                        #TODO display in native card language
+                        'set_code': st.column_config.TextColumn(
+                            'Set', help='Set'
+                        ),
                         'language_code': None,
-                        # 'set_code': None,
                         'rarity': None,
-                        'mana_cost': 'Cost',
-                        'foil': st.column_config.CheckboxColumn('Foil'),
+                        'mana_cost': st.column_config.TextColumn(
+                            'Cost', help='Mana cost'
+                        ),
+                        'foil': st.column_config.CheckboxColumn(
+                            'Foil', help='Foil'
+                        ),
+                        'is_commander': st.column_config.CheckboxColumn(
+                            'C', help='Commander'
+                        ),
                         'condition_code': None,
                         'create_ns': None,
-                        'open': st.column_config.CheckboxColumn('Open'),
+                        'open': st.column_config.CheckboxColumn(
+                            'Open', help='Open card'
+                        )
                     },
                     disabled=[
                         'name', 'type', 'language_code', 'set_code', 'rarity', 
                         'mana_cost', 'foil', 'condition_code']
                     ,
-                    on_change=update_table_content_wrapper
+                    on_change=update_table_content_wrapper,
+                    kwargs={
+                        'df_deck_type_content': deck_type_content,
+                        'card_id_cols': card_id_cols,
+                        'table': f'st.session_state.v_deck_content_{type}'
+                    }
                 )
             else:
                 st.write('')

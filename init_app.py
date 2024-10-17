@@ -347,7 +347,7 @@ def reset_table_tokens():
         )
     """)
     csr.execute(create_table_ddl('tokens_temp'))
-    columns = csr.read_sql('select * from tokens_temp').columns
+    columns = csr.read_sql('select * from tokens_temp limit 1').columns
     csr.executemany(
     f"""
         insert into tokens_temp ({', '.join(columns)})
@@ -399,7 +399,7 @@ def reset_table_foreign_data():
         )
     """)
     csr.execute(create_table_ddl('foreign_data_temp'))
-    columns = csr.read_sql('select * from foreign_data_temp').columns
+    columns = csr.read_sql('select * from foreign_data_temp limit 1').columns
     csr.executemany(
     f"""
         insert into foreign_data_temp ({', '.join(columns)})

@@ -65,10 +65,11 @@ def get_content():
             hide_index=True,
             column_config={
                 'name': st.column_config.TextColumn(
-                    'Collection',
-                    width='medium'
+                    'Collection', width='medium', help='Collection name'
                 ),
-                'open': st.column_config.CheckboxColumn('Open')
+                'open': st.column_config.CheckboxColumn(
+                    'Open', help='Open collection'
+                )
             },
             column_order=['name', 'open'],
             on_change=list_callback
@@ -154,6 +155,9 @@ def get_content():
                         del st.session_state.v_selected_set
                     return
                 update_table_content('list', df_list_content.iloc[ix], column, value)
+                if ((df_list_content.iloc[ix]['open']) and \
+                    (column == 'qnty') and (value == 0)):
+                    st.session_state.selected_card = None
             else:
                 # Если фунция была вызвана при изменении виджета
                 update_table_content(**kwargs)
@@ -171,21 +175,33 @@ def get_content():
                 'card_uuid': None,
                 'language': None,
                 'qnty': st.column_config.NumberColumn(
-                    'Qnty', min_value=0, max_value=99, step=1
+                    'Q', min_value=0, step=1, help='Quantity'
                 ),
-                'name':'Name',
+                'name': st.column_config.TextColumn(
+                    'Name', help='Card name'
+                ),
                 'card_number': None,
-                'type': 'Type',
-                'set_code': 'Set',
+                'type': st.column_config.TextColumn(
+                    'Type', help='Card type'
+                ),
+                'set_code': st.column_config.TextColumn(
+                    'Set', help='Set'
+                ),
                 'language_code': None,
                 'set_name': None,
                 'keyrune_code': None,
                 'rarity': None,
-                'mana_cost': 'Cost',
-                'foil': st.column_config.CheckboxColumn('Foil'),
+                'mana_cost': st.column_config.TextColumn(
+                    'Cost', help='Mana cost'
+                ),
+                'foil': st.column_config.CheckboxColumn(
+                    'Foil', help='Foil'
+                ),
                 'condition_code': None,
                 'create_ns': None,
-                'open': st.column_config.CheckboxColumn('Open'),
+                'open': st.column_config.CheckboxColumn(
+                    'Open',  help='Open card'
+                )
             },
             disabled=[
                 'name', 'type', 'language_code', 'set_code', 'rarity', 

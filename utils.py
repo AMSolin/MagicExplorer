@@ -379,6 +379,7 @@ def get_deck_content(deck_id):
             dc.condition_code,
             dc.language,
             dc.qnty,
+            dc.is_commander,
             ca.name, --#TODO change name according language
             ca.number as card_number,
             ca.type,
@@ -502,7 +503,6 @@ def update_table(
 def update_table_content(entity, card_id, column, value):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
-    card_dict = card_id.to_dict()
     csr = Db('user_data.db')
     if not ((column == 'qnty') and (value > 0)):
         #Если установили qnty = 0 или изменили другое поле
@@ -510,22 +510,25 @@ def update_table_content(entity, card_id, column, value):
         f"""
             delete from {entity}_content
             where
-                list_id = {card_dict['list_id']}
-                and card_uuid = X'{card_dict['card_uuid'].hex()}'
-                and condition_code = '{card_dict['condition_code']}'
-                and foil = {card_dict['foil']}
-                and language = '{card_dict['language']}'
-        """)
-        if column == 'qnty':
-            st.session_state.selected_card = None
-        elif isinstance(column, list):
+                {entity}_id = {card_id[f'{entity}_id']}
+                and card_uuid = X'{card_id['card_uuid'].hex()}'
+                and condition_code = '{card_id['condition_code']}'
+                and foil = {card_id['foil']}
+                and language = '{card_id['language']}'
+        """
+        + (
+                f"and deck_type_name = '{card_id['deck_type_name']}'"
+                if entity == 'deck' else ""
+            )
+        )
+
+        if isinstance(column, list):
             for i in range(len(column)):
-                card_dict[column[i]] = value[i]
-                st.session_state.selected_card[column[i]] = value[i]
+                card_id[column[i]] = value[i]
         else:
-            card_dict[column] = value
-            st.session_state.selected_card[column] = value
+            card_id[column] = value
     if not ((column == 'qnty') and (value == 0)):
+        card_dict = card_id.to_dict()
         #Если не устанаваливали qnty = 0
         if column != 'qnty':
             #В случае конфликта при изменении ключевых полей
@@ -535,18 +538,16 @@ def update_table_content(entity, card_id, column, value):
             #Иначе в случае конфликта обновим значение qnty
             add_method = 'excluded.qnty'
             card_dict[column] = value
+        columns = csr.read_sql(f'select * from {entity}_content limit 1').columns
+        primary_key = [col for col in columns if col not in ['qnty', 'is_commander']] 
         csr.execute(
         f"""
-            insert into {entity}_content (
-                list_id, card_uuid, condition_code, foil, language, qnty
-            ) 
-            values(?, ?, ?, ?, ?, ?)
-            on conflict (
-                list_id, card_uuid, condition_code, foil, language
-            ) do update set qnty = {add_method}
+            insert into {entity}_content ({', '.join(columns)}) 
+            values({', '.join('? ' for _ in range(len(columns)))})
+            on conflict ({', '.join(primary_key)})
+            do update set qnty = {add_method}
         """, 
-        (card_dict['list_id'], (card_dict['card_uuid']), card_dict['condition_code'],
-            card_dict['foil'], card_dict['language'], card_dict['qnty'])
+        [card_dict[value] for value in columns]
         )
 
 def manual_import_cards_to_user_data(
