@@ -101,6 +101,16 @@ def get_content():
             'qnty', 'is_commander',
             'set_code', 'card_number', 'language_code'
         ]
+
+        move_dict = {
+            'Move One to Main Deck': ['One', 'Main'],
+            'Move All to Main Deck': ['All', 'Main'],
+            'Move One to Sideboard': ['One', 'Side'],
+            'Move All to Sideboard': ['All', 'Side'],
+            'Move One to Maybeboard': ['One', 'Maybe'],
+            'Move All to Maybeboard': ['All', 'Maybe']
+        }
+        
         if st.session_state.selected_deck_card is not None:
             mask = (
                 df_deck_content[card_id_cols[:6]] == \
@@ -121,11 +131,11 @@ def get_content():
                     for ix, pair in table_key['edited_rows'].items()
                 ]
                 ix, [[column, value]]= changes[0]
+                card_id = kwargs['df_deck_type_content'].iloc[ix]
                 if column == 'open':
                     if value == True:
-                        st.session_state.selected_deck_card = \
-                            kwargs['df_deck_type_content'][card_id_cols] \
-                                .iloc[ix]
+                        st.session_state.selected_deck_card = card_id \
+                            [card_id_cols]
                         st.session_state.v_tab_bar = 'Card overview'
                     else:
                         st.session_state.selected_deck_card = None
@@ -133,12 +143,22 @@ def get_content():
                     if 'v_selected_deck_set' in st.session_state:
                         del st.session_state.v_selected_deck_set
                     return
-                update_table_content(
-                    'deck', kwargs['df_deck_type_content'].iloc[ix],
-                    column, value
-                )
-                if ((kwargs['df_deck_type_content'].iloc[ix]['open']) and \
-                    (column == 'qnty') and (value == 0)):
+                elif column == 'deck_type_name':
+                    amount, value = move_dict[value]
+                    if 'One' in amount:
+                        # Сперва добавим одну карту
+                        card_id_add = card_id.copy()
+                        card_id_add.loc['qnty'] = 1
+                        update_table_content(
+                            'deck', card_id_add, column, value
+                        )
+                        # Затем обновим значения для вычитания 1 карты
+                        column = 'qnty'
+                        card_id.loc['qnty'] -= 1
+                        value = int(card_id.loc['qnty'])
+
+                update_table_content('deck', card_id, column, value)
+                if ((card_id['open']) and (column == 'qnty') and (value == 0)):
                     st.session_state.selected_card = None
             else:
                 # Если фунция была вызвана при изменении виджета
@@ -165,6 +185,9 @@ def get_content():
                 divider='red'
             )
             if total_cards > 0:
+                move_options = [
+                    action for action in move_dict.keys() if alias not in action
+                ]
                 deck_type_content = df_deck_content \
                     .loc[df_deck_content['deck_type_name'] == type]
                 _ = st.data_editor(
@@ -173,7 +196,6 @@ def get_content():
                     hide_index=True,
                     column_config={
                         'deck_id': None,
-                        'deck_type_name': None,
                         'card_uuid': None,
                         'language': None,
                         'qnty': st.column_config.NumberColumn(
@@ -202,14 +224,21 @@ def get_content():
                         ),
                         'condition_code': None,
                         'create_ns': None,
+                        'deck_type_name': st.column_config.SelectboxColumn(
+                            'Move to', options=move_options, help='Move card'
+                        ),
                         'open': st.column_config.CheckboxColumn(
                             'Open', help='Open card'
                         )
                     },
+                    column_order=[
+                        'qnty', 'is_commander', 'name','type', 'set_code',
+                        'mana_cost', 'foil', 'deck_type_name', 'open'
+                    ],
                     disabled=[
                         'name', 'type', 'language_code', 'set_code', 'rarity', 
-                        'mana_cost', 'foil', 'condition_code']
-                    ,
+                        'mana_cost', 'foil', 'condition_code'
+                    ],
                     on_change=update_table_content_wrapper,
                     kwargs={
                         'df_deck_type_content': deck_type_content,
