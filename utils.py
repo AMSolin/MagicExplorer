@@ -406,7 +406,22 @@ def get_deck_content(deck_id):
 
 def get_decks():
     csr = Db('user_data.db')
-    result = csr.read_sql('select * from decks order by deck_id')
+    result = csr.read_sql(
+    """
+        select
+            d.deck_id,
+            d.name,
+            datetime(d.creation_date, 'unixepoch', 'localtime') as creation_date,
+            d.note,
+            d.player_id,
+            d.is_wish_deck,
+            p.name as owner
+        from decks as d
+        left join players as p
+            on d.player_id = p.player_id
+        order by d.creation_date
+    """,
+    parse_dates='creation_date')
     result['create_ns'] = time.time_ns()
     return result
 

@@ -27,7 +27,7 @@ def get_content():
                 st.session_state.current_deck_id = df_decks.iloc[ix].loc['deck_id']
             else:
                 deck_id = df_decks.iloc[ix].loc['deck_id']
-                #TODO st.session_state.v_tab_bar = None
+                #TODO st.session_state.v_deck_tab_bar = None
                 #TODO st.session_state.selected_deck_card = None
                 try:
                     update_table('deck', deck_id, col, val)
@@ -136,10 +136,10 @@ def get_content():
                     if value == True:
                         st.session_state.selected_deck_card = card_id \
                             [card_id_cols]
-                        st.session_state.v_tab_bar = 'Card overview'
+                        st.session_state.v_deck_tab_bar = 'Card overview'
                     else:
                         st.session_state.selected_deck_card = None
-                        st.session_state.v_tab_bar = 'Collection info'
+                        st.session_state.v_deck_tab_bar = 'Deck info'
                     if 'v_selected_deck_set' in st.session_state:
                         del st.session_state.v_selected_deck_set
                     return
@@ -179,12 +179,13 @@ def get_content():
                     .loc[type].loc[['total_cards', 'distinct_cards']].to_list()
             except:
                 total_cards =  distinct_cards  = 0
-            st.subheader(
-                f"{alias} - {total_cards} cards, " +
-                f"{distinct_cards} distinct",
-                divider='red'
-            )
+            
             if total_cards > 0:
+                st.subheader(
+                    f"{alias} - {total_cards} cards, " +
+                    f"{distinct_cards} distinct",
+                    divider='red'
+                )
                 move_options = [
                     action for action in move_dict.keys() if alias not in action
                 ]
@@ -219,9 +220,7 @@ def get_content():
                         'foil': st.column_config.CheckboxColumn(
                             'Foil', help='Foil'
                         ),
-                        'is_commander': st.column_config.CheckboxColumn(
-                            'C', help='Commander'
-                        ),
+                        'is_commander': None,
                         'condition_code': None,
                         'create_ns': None,
                         'deck_type_name': st.column_config.SelectboxColumn(
@@ -252,41 +251,57 @@ def get_content():
         render_deck_content_by_type('Side', 'Sideboard')
         render_deck_content_by_type('Maybe', 'Maybeboard')
     with overview_side:
-        deck_tabs =['Deck & cards overview', 'Add cards']
-        deck_active_tab = show_tab_bar(deck_tabs)
-        if deck_active_tab == deck_tabs[0]:
-            deck_name, creation_dtm, note, player_id, owner = df_decks \
-                .loc[
-                    mask_list,
-                    ['name', 'creation_date', 'note', 'player_id', 'owner']
-                ] \
-                .values.ravel()
-            col_deck_name, col_owner, col_creation_date, col_counter =  \
-                st.columns((0.3, 0.3, 0.2, 0.15))
-            
-            def update_table_wrapper(**kwargs):
-                try:
-                    update_table(**kwargs)
-                except sqlite3.IntegrityError:
-                    deck_info_container.error(
-                        f'Deck {st.session_state.v_deck_name} already exist!'
-                    )
-                    st.session_state.v_deck_name = deck_name
-            
-            _ = col_deck_name.text_input(
-                'Deck name:',
-                value=deck_name,
-                key='v_deck_name',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'default_value': None,
-                    'id': st.session_state.current_deck_id,
-                    'column': 'name',
-                    'value': 'st.session_state.v_deck_name'
-                }
-            )
 
+        deck_name, creation_dtm, note, player_id, owner, \
+        is_wish_deck = df_decks \
+            .loc[
+                mask_list,
+                [
+                    'name', 'creation_date', 'note', 'player_id', 'owner',
+                    'is_wish_deck'
+                ]
+            ] \
+            .values.ravel()
+        
+        def update_table_wrapper(**kwargs):
+            try:
+                update_table(**kwargs)
+            except sqlite3.IntegrityError:
+                deck_name_container.error(
+                    f'Deck {st.session_state.v_deck_name} already exist!'
+                )
+                st.session_state.v_deck_name = deck_name
+        
+        deck_name_container = st.container()
+        _ = deck_name_container.text_input(
+            'Deck name:',
+            value=deck_name,
+            key='v_deck_name',
+            on_change=update_table_wrapper,
+            kwargs={
+                'entity': 'deck',
+                'default_value': None,
+                'id': st.session_state.current_deck_id,
+                'column': 'name',
+                'value': 'st.session_state.v_deck_name'
+            }
+        )
+
+        deck_tabs = ['Deck info', 'Add cards']
+        default_tab = 'Deck info'
+        if st.session_state.selected_deck_card is not None:
+            deck_tabs += ['Card overview', 'Edit card']
+            default_tab = 'Card overview'
+        deck_active_tab = show_tab_bar(
+            deck_tabs,
+            tabs_size=[1, 1, 1, 1],
+            default=default_tab,
+            key='v_deck_tab_bar'
+        )
+
+        if deck_active_tab == 'Deck info':
+            col_owner, col_creation_date, col_wish_deck = \
+                st.columns([0.4, 0.3, 0.3])
             df_players = get_players()[['player_id', 'name']]
             if owner is not None:
                 idx = int(
@@ -328,14 +343,22 @@ def get_content():
                 }
             )
 
-            _ = col_counter.text_input(
-                'Cards total:',
-                value=df_deck_content['qnty'].sum(),
-                disabled=True
+            col_wish_deck.write('')
+            col_wish_deck.write('')
+            _ = col_wish_deck.checkbox(
+                'Mark as wish deck',
+                value=is_wish_deck,
+                key='v_is_wish_deck',
+                on_change=update_table_wrapper,
+                kwargs={
+                    'entity': 'deck',
+                    'id': st.session_state.current_list_id,
+                    'column': 'is_wish_deck',
+                    'value': 'int(st.session_state.v_is_wish_deck)'
+                }
             )
 
-            deck_info_container = st.container()
-            deck_info_container.text_area(
+            _ = st.text_area(
                 'Deck note',
                 value=note,
                 key='v_deck_note',
@@ -345,7 +368,6 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'default_value': None,
                     'id': st.session_state.current_deck_id,
                     'column': 'note',
                     'value': 'st.session_state.v_deck_note'
@@ -411,7 +433,7 @@ def get_content():
                 prop_col.markdown(text_field)
             if card_active_tab == card_tabs[1]:
                 _ = prop_col.selectbox(
-                    'Collection:',
+                    'Deck:',
                     options=df_decks['deck_id'],
                     format_func=lambda x: dict(
                         df_decks[['deck_id', 'name']].values

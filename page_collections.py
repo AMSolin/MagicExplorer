@@ -258,8 +258,8 @@ def get_content():
         collection_tabs = ['Collection info', 'Add cards']
         default_tab = 'Collection info'
         if st.session_state.selected_card is not None:
-            default_tab = 'Card overview'
             collection_tabs += ['Card overview', 'Edit card']
+            default_tab = 'Card overview'
         collection_active_tab = show_tab_bar(
             collection_tabs,
             tabs_size=[1.2, 1, 1, 0.8],
@@ -269,7 +269,6 @@ def get_content():
 
         if collection_active_tab == 'Collection info':
             col_owner, col_creation_date = st.columns([0.6, 0.4])
-
             df_players = get_players()[['player_id', 'name']]
             if owner is not None:
                 idx = int(
@@ -334,7 +333,7 @@ def get_content():
                 }
             )
 
-            st.text_area(
+            _ = st.text_area(
                 'Collection note',
                 value=note,
                 key='v_list_note',
