@@ -3,7 +3,25 @@ from st_click_detector import click_detector
 
 from utils import *
 
-def render_card_prop_tab(selected_card, callback_function):
+def update_searched_card(entity, card_id, column, value):
+    """
+    Callback fucntion for update searching card in
+    "Add cards" tab
+    """
+    if isinstance(value, str) and 'session_state' in value:
+        card_id[column] = eval(value)
+    else:
+        card_id[column] = value
+    if column not in ['foil', 'condition_code']:
+        # When card_uuid is changed
+        entity = 'deck_card' if entity == 'deck' else 'card'
+        st.session_state[f'searched_{entity}'] = search_set_by_name(
+                'ignore_name',
+                card_id['language'],
+                card_id['card_uuid'].hex()
+            ).iloc[0]
+
+def render_card_prop_tab(entity, selected_card, callback_function):
     if isinstance(selected_card, list):
         selected_card_name = selected_card[0]
         selected_card_language = selected_card[1]
@@ -15,17 +33,17 @@ def render_card_prop_tab(selected_card, callback_function):
         selected_card_language
     )
     if isinstance(selected_card, list):
-        selected_card = st.session_state.searched_card = \
+        selected_card = st.session_state[f'searched_{entity}_card'] = \
             df_set_codes[
                 (df_set_codes['name'] == selected_card_name) &
                 (df_set_codes['language'] == selected_card_language)
             ].iloc[0]
 
-    sets_dict = generate_set_dict(df_set_codes, selected_card)
+    sets_dict = generate_set_dict(entity, df_set_codes, selected_card)
 
-    css = generate_css_set_icons(sets_dict)
+    css = generate_css_set_icons(entity, sets_dict)
 
-    _ = click_detector(css, key='v_selected_set')
+    _ = click_detector(css, key=f'v_selected_{entity}_set')
 
     st.markdown(
         f"Set:&nbsp;&nbsp;**{selected_card['set_name']}**"

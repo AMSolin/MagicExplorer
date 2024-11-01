@@ -252,28 +252,30 @@ def search_languages_by_card_uuid(card_uuid):
     """)
     return result['language'].to_list()
 
-def generate_set_dict(df_set_codes: pd.DataFrame, selected_card: pd.Series=None):
+def generate_set_dict(
+        entity: str, df_set_codes: pd.DataFrame, selected_card: pd.Series=None
+    ):
     sets_dict = {}
     df_set_codes = df_set_codes \
         [df_set_codes['row_number'] == 1] \
         [['set_code', 'keyrune_code', 'card_number', 'language', 'card_uuid', 'create_ns']]
     if selected_card is not None:
-        st.session_state.v_selected_set = ' '.join(
+        st.session_state[f'v_selected_{entity}_set'] = ' '.join(
             selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid', 'create_ns']] \
                 .apply(lambda x: x if isinstance(x, str) else x.hex()).values
         )
     for row in df_set_codes.itertuples():
         idx, set_code, keyrune_code, card_number, language, card_uuid, create_ns = row
         css_id = f'{set_code} {card_number} {language} {card_uuid.hex()} {create_ns}'
-        if 'v_selected_set' not in st.session_state and idx == 0:
-            st.session_state.v_selected_set = css_id
+        if f'v_selected_{entity}_set' not in st.session_state and idx == 0:
+            st.session_state[f'v_selected_{entity}_set'] = css_id
         sets_dict[css_id] = f'<a id="{css_id}" class="ss ss-{keyrune_code} ss-2x"></a> '
     return sets_dict
 
-def generate_css_set_icons(sets_dict):
+def generate_css_set_icons(entity, sets_dict):
     css = '<link href="//cdn.jsdelivr.net/npm/keyrune@latest/css/keyrune.css" rel="stylesheet" type="text/css" />'
     for css_id, set_css in sets_dict.items():
-        if css_id.split(' ')[0] == st.session_state.v_selected_set.split(' ')[0]:
+        if css_id.split(' ')[0] == st.session_state[f'v_selected_{entity}_set'].split(' ')[0]:
             set_css = f'<span style="color: orange">{set_css}</span>'
         css+= set_css
     return css
