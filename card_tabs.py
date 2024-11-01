@@ -14,8 +14,7 @@ def update_searched_card(entity, card_id, column, value):
         card_id[column] = value
     if column not in ['foil', 'condition_code']:
         # When card_uuid is changed
-        entity = 'deck_card' if entity == 'deck' else 'card'
-        st.session_state[f'searched_{entity}'] = search_set_by_name(
+        st.session_state[f'searched_{entity}_card'] = search_set_by_name(
                 'ignore_name',
                 card_id['language'],
                 card_id['card_uuid'].hex()
@@ -62,7 +61,7 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         index=current_language,
         on_change=callback_function,
         kwargs={
-            'entity': 'list',
+            'entity': entity,
             'card_id': selected_card,
             'column': 'language',
             'value': 'st.session_state.v_card_language',
@@ -99,7 +98,7 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         index=current_number,
         on_change=card_number_to_uuid,
         kwargs={
-            'entity': 'list',
+            'entity': entity,
             'card_id':selected_card,
             'column': 'card_uuid'
         }
@@ -110,7 +109,7 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         key='v_foil_toggle',
         on_change=callback_function,
         kwargs={
-            'entity': 'list',
+            'entity': entity,
             'card_id':selected_card,
             'column': 'foil',
             'value': 'int(st.session_state.v_foil_toggle)',
@@ -128,7 +127,7 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         key='v_card_condition',
         on_change=callback_function,
         kwargs={
-            'entity': 'list',
+            'entity': entity,
             'card_id':selected_card,
             'column': 'condition_code',
             'value': 'st.session_state.v_card_condition',

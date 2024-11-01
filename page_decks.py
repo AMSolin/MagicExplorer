@@ -1,17 +1,44 @@
 import streamlit as st
+from streamlit_searchbox import st_searchbox
 from utils import *
+from card_tabs import *
 
 def get_content():
     display_toasts()
     df_decks = get_decks().assign(open=False)
     if 'current_deck_id' not in st.session_state:
         st.session_state.current_deck_id = df_decks.iloc[0].loc['deck_id']
-    mask_list = df_decks['deck_id'] == st.session_state.current_deck_id
-    df_decks.loc[mask_list, 'open'] = True
+    mask_deck = df_decks['deck_id'] == st.session_state.current_deck_id
+    df_decks.loc[mask_deck, 'open'] = True
 
-    if 'selected_deck_card' not in st.session_state:
-        st.session_state.selected_deck_card = None
-    #TODO big match block
+    def check_match_deck__and_set(active_tab, card_key):
+        result = (st.session_state.get('v_deck_tab_bar') == active_tab) \
+        and ((card_info := st.session_state.get(card_key)) is not None) \
+        and (selected_set := st.session_state.get('v_selected_deck_set')) \
+        and (card_info.loc['set_code'] != selected_set.split(' ')[0]) \
+        and (int(card_info.loc['create_ns']) <= int(selected_set.split(' ')[-1]))
+        return result
+    
+    if ('selected_deck_card' not in st.session_state) or \
+        (
+            (st.session_state.get('selected_deck_card') is not None) and
+            (st.session_state.get('v_deck_tab_bar') not in ['Card overview', 'Edit card'])
+        ):
+            st.session_state.selected_deck_card = None
+    elif check_match_deck__and_set('Edit card', 'selected_deck_card'):
+        _, _, language, card_uuid, _ = st.session_state.v_selected_deck_set.split(' ')
+        columns = ['language', 'card_uuid']
+        values = [language, uuid.UUID(card_uuid).bytes]
+        update_table_content(
+            'deck', st.session_state.selected_deck_card, columns, values
+        )
+        st.session_state.selected_deck_card.rename('need_update', inplace=True)
+        del st.session_state.v_selected_deck_set
+    elif check_match_deck__and_set('Add cards', 'searched_deck_card'):
+        _, _, language, card_uuid, _ = st.session_state.v_selected_deck_set.split(' ')
+        st.session_state.searched_deck_card = search_set_by_name(
+            'ignore_name', language, card_uuid
+        ).iloc[0]
     
     with st.sidebar:
         table_container = st.container()
@@ -27,8 +54,8 @@ def get_content():
                 st.session_state.current_deck_id = df_decks.iloc[ix].loc['deck_id']
             else:
                 deck_id = df_decks.iloc[ix].loc['deck_id']
-                #TODO st.session_state.v_deck_tab_bar = None
-                #TODO st.session_state.selected_deck_card = None
+                st.session_state.v_deck_tab_bar = None
+                st.session_state.selected_deck_card = None
                 try:
                     update_table('deck', deck_id, col, val)
                 except sqlite3.IntegrityError:
@@ -90,9 +117,9 @@ def get_content():
         elif (action == 'merge') and (df_decks.shape[0] > 1):
             pass #TODO merge
     
-    list_side, overview_side = st.columns((0.6, 0.4))
+    deck_side, overview_side = st.columns((0.6, 0.4))
 
-    with list_side:
+    with deck_side:
         df_deck_content = get_deck_content(st.session_state.current_deck_id) \
             .assign(open=False)
         card_id_cols = [
@@ -158,8 +185,8 @@ def get_content():
                         value = int(card_id.loc['qnty'])
 
                 update_table_content('deck', card_id, column, value)
-                if ((card_id['open']) and (column == 'qnty') and (value == 0)):
-                    st.session_state.selected_card = None
+                if (card_id['open']) and (column == 'qnty') and (value == 0):
+                    st.session_state.selected_deck_card = None
             else:
                 # Если фунция была вызвана при изменении виджета
                 update_table_content(**kwargs)
@@ -172,7 +199,11 @@ def get_content():
             .agg(
                 total_cards=pd.NamedAgg('qnty', sum),
                 distinct_cards=pd.NamedAgg('name', lambda s: s.nunique()),
+                has_commander=pd.NamedAgg('is_commander', sum),
             )
+        cmdr_col = st.column_config.CheckboxColumn('Cmdr', help='Commander') \
+            if df_deck_type_info['has_commander'].sum() > 0 \
+            else None
         def render_deck_content_by_type(type: str, alias: str):
             try:
                 total_cards, distinct_cards = df_deck_type_info \
@@ -220,7 +251,7 @@ def get_content():
                         'foil': st.column_config.CheckboxColumn(
                             'Foil', help='Foil'
                         ),
-                        'is_commander': None,
+                        'is_commander': cmdr_col,
                         'condition_code': None,
                         'create_ns': None,
                         'deck_type_name': st.column_config.SelectboxColumn(
@@ -236,7 +267,7 @@ def get_content():
                     ],
                     disabled=[
                         'name', 'type', 'language_code', 'set_code', 'rarity', 
-                        'mana_cost', 'foil', 'condition_code'
+                        'mana_cost', 'foil', 'is_commander', 'condition_code'
                     ],
                     on_change=update_table_content_wrapper,
                     kwargs={
@@ -255,7 +286,7 @@ def get_content():
         deck_name, creation_dtm, note, player_id, owner, \
         is_wish_deck = df_decks \
             .loc[
-                mask_list,
+                mask_deck,
                 [
                     'name', 'creation_date', 'note', 'player_id', 'owner',
                     'is_wish_deck'
@@ -352,7 +383,7 @@ def get_content():
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'id': st.session_state.current_list_id,
+                    'id': st.session_state.current_deck_id,
                     'column': 'is_wish_deck',
                     'value': 'int(st.session_state.v_is_wish_deck)'
                 }
@@ -373,6 +404,91 @@ def get_content():
                     'value': 'st.session_state.v_deck_note'
                 }
             )
+
+        if deck_active_tab == 'Add cards':
+            search_bar, exact_seach_box = st.columns((0.7, 0.3))
+
+            def reset_searchbar():
+                del st.session_state.v_searched_deck_card
+
+            exact_match = exact_seach_box.checkbox(
+                'Exact match',
+                value=False,
+                on_change=reset_searchbar
+            )
+            searh_function = to_lower_and_exact_search if exact_match \
+                else to_lower_and_substring_search
+            with search_bar:
+                searched_deck_card = st_searchbox(
+                    search_function=searh_function,
+                    placeholder="Enter card name",
+                    key="v_searched_deck_card",
+                    clearable=True
+                )
+            
+            img_col, prop_col = st.columns((0.5, 0.5))
+            if searched_deck_card:
+                # Workaround for realize callback function in serchbox
+                # We want to know, when widget value has changed
+                is_new_search = False
+                if st.session_state.get('prev_searched_deck_card', []) != searched_deck_card:
+                    is_new_search = True
+                    st.session_state.prev_searched_deck_card = searched_deck_card
+                
+                with prop_col:
+                    if ('searched_deck_card' in st.session_state and
+                        not is_new_search):
+                        render_card_prop_tab(
+                            'deck',
+                            st.session_state.searched_deck_card,
+                            update_searched_card
+                        )
+                    else:
+                        render_card_prop_tab(
+                            'deck',
+                            searched_deck_card,
+                            update_searched_card
+                        )
+                    
+                    with st.form('add card submit form'):
+                        card_uuid, deck_type_name, \
+                        condition_code, foil, language = \
+                            st.session_state.searched_deck_card \
+                                .loc[['card_uuid', 'deck_type_name',
+                                      'condition_code', 'foil', 'language']]
+                        
+                        current_qnty = df_deck_content[
+                                (df_deck_content['card_uuid'] == card_uuid) &
+                                (df_deck_content['deck_type_name'] == deck_type_name) &
+                                (df_deck_content['condition_code'] == condition_code) &
+                                (df_deck_content['foil'] == foil) &
+                                (df_deck_content['language'] == language)
+                            ] \
+                            ['qnty'].sum()
+                        
+                        qnty = st.number_input(
+                            label='Enter quantity:',
+                            value=max(current_qnty, 1),
+                            min_value=1, max_value=99, step=1
+                        )
+                        st.write('')
+                        if st.form_submit_button('Update deck'):
+                            st.session_state.searched_deck_card['deck_id'] = \
+                                st.session_state.current_deck_id
+                            st.session_state.searched_deck_card['qnty'] = qnty
+                            update_table_content(
+                                'deck', st.session_state.searched_deck_card,
+                                'qnty', qnty
+                            )
+                            st.rerun()
+                
+                with img_col:
+                    card_api_key = st.session_state.searched_deck_card \
+                        .loc[['set_code', 'card_number', 'language_code']] \
+                        .to_list()
+                    card_props = get_card_properties(*card_api_key)
+                    side_idx = render_card_img_tab(card_props)
+
         if st.session_state.selected_deck_card is not None:
 
             card_tabs =['Card overview', 'Edit card']
@@ -442,13 +558,13 @@ def get_content():
                         df_decks['deck_id'] == st.session_state.current_deck_id
                         ].index[0]
                     ),
-                    key='v_card_list',
+                    key='v_card_deck',
                     on_change=update_table_content_wrapper,
                     kwargs={
                         'entity': 'deck',
                         'card_id': st.session_state.selected_deck_card,
                         'column': 'deck_id',
-                        'value': 'st.session_state.v_card_list',
+                        'value': 'st.session_state.v_card_deck',
 
                     }
                 )

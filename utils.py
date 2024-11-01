@@ -126,6 +126,8 @@ def search_set_by_name(
                 c.card_uuid,
                 'NM' as condition_code,
                 0 as foil,
+                'Main' as deck_type_name,
+                0 as is_commander,
                 row_number() over (
                     partition by c.set_code order by c.number
                 ) as row_number
@@ -165,6 +167,8 @@ def search_set_by_name(
                 c.card_uuid,
                 'NM' as condition_code,
                 0 as foil,
+                'Main' as deck_type_name,
+                0 as is_commander,
                 row_number() over (
                     partition by 
                         c.set_code 
