@@ -449,45 +449,46 @@ def get_content():
                             searched_deck_card,
                             update_searched_card
                         )
-                    
-                    with st.form('add card submit form'):
-                        card_uuid, deck_type_name, \
-                        condition_code, foil, language = \
-                            st.session_state.searched_deck_card \
-                                .loc[['card_uuid', 'deck_type_name',
-                                      'condition_code', 'foil', 'language']]
-                        
-                        current_qnty = df_deck_content[
-                                (df_deck_content['card_uuid'] == card_uuid) &
-                                (df_deck_content['deck_type_name'] == deck_type_name) &
-                                (df_deck_content['condition_code'] == condition_code) &
-                                (df_deck_content['foil'] == foil) &
-                                (df_deck_content['language'] == language)
-                            ] \
-                            ['qnty'].sum()
-                        
-                        qnty = st.number_input(
-                            label='Enter quantity:',
-                            value=max(current_qnty, 1),
-                            min_value=1, max_value=99, step=1
-                        )
-                        st.write('')
-                        if st.form_submit_button('Update deck'):
-                            st.session_state.searched_deck_card['deck_id'] = \
-                                st.session_state.current_deck_id
-                            st.session_state.searched_deck_card['qnty'] = qnty
-                            update_table_content(
-                                'deck', st.session_state.searched_deck_card,
-                                'qnty', qnty
-                            )
-                            st.rerun()
+                    add_cards_form = st.form('add cards')
                 
                 with img_col:
                     card_api_key = st.session_state.searched_deck_card \
                         .loc[['set_code', 'card_number', 'language_code']] \
                         .to_list()
                     card_props = get_card_properties(*card_api_key)
-                    side_idx = render_card_img_tab(card_props)
+                    _ = render_card_img_tab(card_props)
+                
+                with add_cards_form:
+                    card_uuid, deck_type_name, \
+                    condition_code, foil, language = \
+                        st.session_state.searched_deck_card \
+                            .loc[['card_uuid', 'deck_type_name',
+                                    'condition_code', 'foil', 'language']]
+                    
+                    current_qnty = df_deck_content[
+                            (df_deck_content['card_uuid'] == card_uuid) &
+                            (df_deck_content['deck_type_name'] == deck_type_name) &
+                            (df_deck_content['condition_code'] == condition_code) &
+                            (df_deck_content['foil'] == foil) &
+                            (df_deck_content['language'] == language)
+                        ] \
+                        ['qnty'].sum()
+                    
+                    qnty = st.number_input(
+                        label='Enter quantity:',
+                        value=max(current_qnty, 1),
+                        min_value=1, max_value=99, step=1
+                    )
+                    st.write('')
+                    if st.form_submit_button('Update deck'):
+                        st.session_state.searched_deck_card['deck_id'] = \
+                            st.session_state.current_deck_id
+                        st.session_state.searched_deck_card['qnty'] = qnty
+                        update_table_content(
+                            'deck', st.session_state.searched_deck_card,
+                            'qnty', qnty
+                        )
+                        st.rerun()
 
         if st.session_state.selected_deck_card is not None:
 
