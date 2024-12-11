@@ -442,51 +442,7 @@ def get_content():
             with img_col:
                 side_idx = render_card_img_tab(card_props)
             if collection_active_tab == 'Card overview':
-                def get_card_prop(props_dict, prop_name, side_idx):
-                    value = props_dict \
-                        .get('card_faces', [{}])[side_idx] \
-                        .get(prop_name, props_dict.get(prop_name))
-                    return value
-                if get_card_prop(card_props, 'power', side_idx):
-                    power = get_card_prop(card_props, 'power', side_idx)
-                    toughness = get_card_prop(card_props, 'toughness', side_idx)
-                    card_props['P/T'] =  \
-                        f'{power}/{toughness}'.replace("*", " ★ ")
-                list_legalities = [
-                    'standard', 'pioneer', 'modern', 'legacy', 
-                    'vintage', 'commander', 'pauper', 'historic', 'alchemy'
-                ]
-                legalities = ''
-                for legality in list_legalities:
-                    if card_props['legalities'][legality] == 'legal':
-                        legalities += (f'{legality}, '.capitalize())
-                card_props['Legalities_only'] = legalities[:-2]
-                props_aliases = [
-                    ('printed_name', 'Card Name'), ('name', 'Card Name'),
-                    ('mana_cost', 'Mana Cost'), ('cmc', 'Mana Value'),
-                    ('printed_type_line', 'Types'), ('type_line', 'Types'),
-                    ('printed_text', 'Card Text'), ('oracle_text', 'Card Text'),
-                    ('flavor_text', 'Flavor Text'), 
-                    ('P/T', 'P/T'), ('rarity', 'Rarity'),
-                    ('collector_number', 'Card Number'), ('artist', 'Artist'),
-                    ('set_name', 'Set Name'), ('released_at', 'Release'),
-                    ('Legalities_only', 'Legalities')
-                ]
-
-                text_field = ''
-                skip_next_property = False
-                for property, alias in props_aliases:
-                    property_value = get_card_prop(card_props, property, side_idx)
-                    if skip_next_property:
-                        skip_next_property = False
-                        continue
-                    elif property_value:
-                        if 'printed' in property:
-                            skip_next_property = True
-                        if 'Text' in alias:
-                            property_value = property_value.replace('\n', '  \n')
-                        text_field += f"""**{alias}**:&nbsp;&nbsp;{property_value}  \n"""
-                
+                text_field = get_card_description(card_props, side_idx)
                 prop_col.markdown(text_field)
             if collection_active_tab == 'Edit card':
                 _ = prop_col.selectbox(

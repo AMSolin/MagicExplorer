@@ -386,18 +386,21 @@ def get_deck_content(deck_id):
             dc.language,
             dc.qnty,
             dc.is_commander,
-            ca.name, --#TODO change name according language
+            coalesce(fd.name, ca.name) as name,
             ca.number as card_number,
-            ca.type,
+            coalesce(fd.type, ca.type) as type,
             la.language_code,
             se.set_code,
-            --se.keyrune_code, #TODO add keyrune symbol
+            lower(se.keyrune_code) as keyrune_code,
+            se.name as set_name,
             ca.rarity,
             ca.mana_cost,
             dc.foil
         from deck_content as dc
         left join cards as ca
             on dc.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on dc.card_uuid = fd.card_uuid and dc.language = fd.language
         left join sets as se
             on ca.set_code = se.set_code
         left join languages as la
@@ -407,7 +410,7 @@ def get_deck_content(deck_id):
             and coalesce(ca.side, 'a') = 'a'
         order by ca.name
     """)
-    result['create_ns'] = time.time_ns()
+    result['create_ns'] = str(time.time_ns())
     return result
 
 def get_decks():

@@ -125,8 +125,8 @@ def get_content():
         card_id_cols = [
             'deck_id', 'card_uuid', 'condition_code', 'foil', 'language',
             'deck_type_name',
-            'qnty', 'is_commander',
-            'set_code', 'card_number', 'language_code'
+            'qnty', 'is_commander', 'name', 'keyrune_code', 'set_name',
+            'set_code', 'card_number', 'language_code', 'create_ns'
         ]
 
         move_dict = {
@@ -490,65 +490,18 @@ def get_content():
                         )
                         st.rerun()
 
-        if st.session_state.selected_deck_card is not None:
-
-            card_tabs =['Card overview', 'Edit card']
-            card_active_tab = show_tab_bar(card_tabs)
+        if deck_active_tab in deck_tabs[2:]:
             img_col, prop_col =  st.columns((0.5, 0.5))
-            card_api_key = [val for val in st.session_state.selected_deck_card[6:].values]
+            card_api_key = st.session_state.selected_deck_card \
+                .loc[['set_code', 'card_number', 'language_code']] \
+                .to_list()
             card_props = get_card_properties(*card_api_key)
-            img_container = img_col.container()
-            if card_props.get('card_faces'):
-                side = img_col.radio(
-                    'no label',
-                    ['Front', 'Back'],
-                    label_visibility='collapsed', 
-                    horizontal=True
-                )
-                ix = 0 if side == 'Front' else 1
-                img_container.image(card_props['card_faces'][ix]['image_uris']['normal'])
-            else:
-                ix = -1
-                img_container.image(card_props['image_uris']['normal'])
-            if card_active_tab == card_tabs[0]:
-                def get_card_prop(props_dict, prop_name, side_ix):
-                    value = props_dict.get(
-                        prop_name, 
-                        card_props.get('card_faces', [{}])[side_ix].get(prop_name, None)
-                    )
-                    return value
-                if get_card_prop(card_props, 'power', ix):
-                    power = get_card_prop(card_props, 'power', ix)
-                    toughness = get_card_prop(card_props, 'toughness', ix)
-                    card_props['P/T'] =  \
-                        f'{power}/{toughness}'
-                list_legalities = [
-                    'standard', 'pioneer', 'modern', 'legacy', 
-                    'vintage', 'commander', 'pauper', 'historic', 'alchemy'
-                ]
-                legalities = ''
-                for legality in list_legalities:
-                    if card_props['legalities'][legality] == 'legal':
-                        legalities += (f'{legality}, '.capitalize())
-                card_props['Legalities_only'] = legalities[:-2]
-                props_aliases = [
-                    ('name', 'Card Name'), ('mana_cost', 'Mana Cost'),
-                    ('cmc', 'Mana Value'), ('type_line', 'Types'),
-                    ('oracle_text', 'Card text'), ('flavor_text', 'Flavor Text'),
-                    ('P/T', 'P/T'), ('rarity', 'Rarity'),
-                    ('collector_number', 'Card Number'), ('artist', 'Artist'),
-                    ('set_name', 'Set Name'), ('released_at', 'Release'),
-                    ('Legalities_only', 'Legalities')
-                ]
-
-                text_field = ''
-                for property, alias in props_aliases:
-                    property_value = get_card_prop(card_props, property, ix)
-                    if property_value:
-                        text_field += f"""**{alias}**:&nbsp;&nbsp;{property_value}  \n"""
-                
+            with img_col:
+                side_idx = render_card_img_tab(card_props)
+            if deck_active_tab == 'Card overview':
+                text_field = get_card_description(card_props, side_idx)
                 prop_col.markdown(text_field)
-            if card_active_tab == card_tabs[1]:
+            if deck_active_tab == 'Edit card':
                 _ = prop_col.selectbox(
                     'Deck:',
                     options=df_decks['deck_id'],
@@ -566,24 +519,14 @@ def get_content():
                         'card_id': st.session_state.selected_deck_card,
                         'column': 'deck_id',
                         'value': 'st.session_state.v_card_deck',
-
                     }
                 )
-                _ = prop_col.selectbox(
-                    'Language:',
-                    key='v_card_language'
-                )
-                prop_col.text('Set:')
-                #TODO panel of set icons
-                _ = prop_col.radio(
-                    'Card number:',
-                    horizontal=True
-                )
-                _ = prop_col.toggle('Foil')
-                _ = prop_col.selectbox(
-                    'Condition:',
-                    key='v_card_condition'
-                )
+                with prop_col:
+                    render_card_prop_tab(
+                        'deck',
+                        st.session_state.selected_deck_card,
+                        update_table_content_wrapper
+                    )
 
 
 
