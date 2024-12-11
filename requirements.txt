@@ -1,4 +1,5 @@
-streamlit
-streamlit_searchbox
-st_click_detector
-extra_streamlit_components
+numpy==1.24.3
+pandas==1.5.3
+streamlit==1.34.0
+streamlit_searchbox==0.1.3
+st-click-detector==0.1.3
