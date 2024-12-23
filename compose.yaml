@@ -1,0 +1,8 @@
+services:
+  magic_explorer:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+     - "/home/share/MagicExplorer/data/:/app/data"
+     - "/home/share/MagicExplorer/import/:/app/import"

@@ -22,10 +22,10 @@ def get_content():
         st.session_state.prev_searched_card_name = searched_card_name
         card_name, card_lang = searched_card_name
         df_card_prints = search_set_by_name(card_name, card_lang)
-        sets_dict = generate_set_dict(df_card_prints)
-        css = generate_css_set_icons(sets_dict)
+        sets_dict = generate_set_dict('import', df_card_prints)
+        css = generate_css_set_icons('import', sets_dict)
 
-        selected_set = click_detector(css, key='selected_set')
+        selected_set = click_detector(css, key='v_selected_import_set')
         selected_card = click_detector(
             get_card_images(df_card_prints, selected_set),
             key='selected_card_detector'

@@ -294,7 +294,7 @@ def get_card_properties(set_code, card_number, lang):
 def get_card_images(df, selected_set):
     content = ''
     df_filtered = df[df['set_code'] == selected_set.split()[0]] \
-        [['set_code', 'number', 'language_code']]
+        [['set_code', 'card_number', 'language_code']]
     for row in df_filtered.itertuples(index=False):
         set_code, card_number, lang = row
         card_props = get_card_properties(set_code, card_number, lang)
@@ -709,12 +709,16 @@ def show_tab_bar(
     return selected_label
 
 def save_to_temp_dir(*args):
-    for root, _, files in os.walk('./data/temp'):
-        for file in files:
-            os.remove(os.path.join(root, file))
+    if os.path.exists(temp_folder := './data/temp'):
+        for root, _, files in os.walk(temp_folder):
+            for file in files:
+                os.remove(os.path.join(root, file))
+    else:
+        os.makedirs(temp_folder)
+    
     db_paths = []
     for db in args:
-        path = os.path.join('./data/temp', db.name)
+        path = os.path.join(temp_folder, db.name)
         db_paths.append(path)
         with open(path, 'wb') as file:
             file.write(db.read())
