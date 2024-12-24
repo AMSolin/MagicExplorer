@@ -22,7 +22,7 @@ def get_content():
     if ('selected_deck_card' not in st.session_state) or \
         (
             (st.session_state.get('selected_deck_card') is not None) and
-            (st.session_state.get('v_deck_tab_bar') not in ['Card overview', 'Edit card'])
+            (st.session_state.get('v_deck_tab_bar') not in ['Card info', 'Edit card'])
         ):
             st.session_state.selected_deck_card = None
     elif check_match_deck__and_set('Edit card', 'selected_deck_card'):
@@ -163,7 +163,7 @@ def get_content():
                     if value == True:
                         st.session_state.selected_deck_card = card_id \
                             [card_id_cols]
-                        st.session_state.v_deck_tab_bar = 'Card overview'
+                        st.session_state.v_deck_tab_bar = 'Card info'
                     else:
                         st.session_state.selected_deck_card = None
                         st.session_state.v_deck_tab_bar = 'Deck info'
@@ -248,9 +248,7 @@ def get_content():
                         'mana_cost': st.column_config.TextColumn(
                             'Cost', help='Mana cost'
                         ),
-                        'foil': st.column_config.CheckboxColumn(
-                            'Foil', help='Foil'
-                        ),
+                        'foil': None,
                         'is_commander': cmdr_col,
                         'condition_code': None,
                         'create_ns': None,
@@ -263,11 +261,11 @@ def get_content():
                     },
                     column_order=[
                         'qnty', 'is_commander', 'name','type', 'set_code',
-                        'mana_cost', 'foil', 'deck_type_name', 'open'
+                        'mana_cost', 'deck_type_name', 'open'
                     ],
                     disabled=[
                         'name', 'type', 'language_code', 'set_code', 'rarity', 
-                        'mana_cost', 'foil', 'is_commander', 'condition_code'
+                        'mana_cost', 'is_commander', 'condition_code'
                     ],
                     on_change=update_table_content_wrapper,
                     kwargs={
@@ -318,14 +316,14 @@ def get_content():
             }
         )
 
-        deck_tabs = ['Deck info', 'Add cards']
+        deck_tabs = ['Deck info', 'Deck builder', 'Add cards']
         default_tab = 'Deck info'
         if st.session_state.selected_deck_card is not None:
-            deck_tabs += ['Card overview', 'Edit card']
-            default_tab = 'Card overview'
+            deck_tabs += ['Card info', 'Edit card']
+            default_tab = 'Card info'
         deck_active_tab = show_tab_bar(
             deck_tabs,
-            tabs_size=[1, 1, 1, 1],
+            tabs_size=[1, 1.2, 1, 1, 1],
             default=default_tab,
             key='v_deck_tab_bar'
         )
@@ -395,7 +393,7 @@ def get_content():
                 key='v_deck_note',
                 placeholder='Add your notes here',
                 max_chars=256,
-                height=10,
+                height=68,
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
@@ -404,6 +402,68 @@ def get_content():
                     'value': 'st.session_state.v_deck_note'
                 }
             )
+
+        if deck_active_tab == 'Deck builder':
+            with st.expander('Search options', icon=":material/manage_search:"):
+                search_form = st.form('search_form', border=False)
+            color_map = {
+                'w': ":material/sunny:",
+                'g': ":material/nature:",
+                'r': ":material/local_fire_department:",
+                'u': ":material/water_drop:",
+                'b': ":material/skull:",
+                'c': ":material/stat_0:",
+                'z': ":material/counter_9:",
+                'l': ":material/landscape_2:",
+            }
+            rarity_map = {
+                'c': "**:gray-background[C]**",
+                'u': "**:blue-background[U]**",
+                'r': "**:orange-background[R]**",
+                'm': "**:red-background[M]**",
+                's': "**:rainbow-background[S]**",
+ 
+            }
+            pills_col, multicolor_col = search_form.columns([0.5, 0.5])
+            color_list = pills_col.pills(
+                'Card colors:',
+                options=color_map.keys(),
+                selection_mode='multi',
+                format_func=lambda option_key: color_map[option_key],
+                help='White, Green, Red, Blue, Black, Colorless, No color, Land'
+            )
+
+            multicolor_option = multicolor_col.selectbox(
+                label='Multicolored options:',
+                options=[
+                    'With multicolored',
+                    'Without multicolored',
+                    'Multicolored only',
+                ],
+            )
+
+            rarity_list = pills_col.segmented_control(
+                'Card rarity:',
+                options=rarity_map.keys(),
+                selection_mode='multi',
+                format_func=lambda option_key: rarity_map[option_key],
+                help='Common, Uncommon, Rare, Mythic, Special'
+            )
+
+            text_col, _, op_col, val_col = search_form.columns([0.48, 0.02, 0.25, 0.25])
+
+            card_name = text_col.text_input('Card name:')
+            card_type = text_col.text_input('Card type:')
+            card_text = text_col.text_input('Card text:')
+
+            operators = ['>=', '>', '=', '<', '<=']
+            op_col.selectbox('Mana', operators, key='w_cmc_op')
+            val_col.number_input('value', value=None, step=1, key='w_cmc_val')
+            op_col.selectbox('Power', operators, key='w_pwr_op')
+            val_col.number_input('value', value=None, step=1, key='w_pwr_val')
+            op_col.selectbox('Toughness', operators, key='w_tgns_op')
+            val_col.number_input('value', value=None, step=1, key='w_tgns_val')
+            search_form.form_submit_button('Search', icon=":material/search:")
 
         if deck_active_tab == 'Add cards':
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
@@ -490,7 +550,7 @@ def get_content():
                         )
                         st.rerun()
 
-        if deck_active_tab in deck_tabs[2:]:
+        if deck_active_tab in deck_tabs[3:]:
             img_col, prop_col =  st.columns((0.5, 0.5))
             card_api_key = st.session_state.selected_deck_card \
                 .loc[['set_code', 'card_number', 'language_code']] \
@@ -498,7 +558,7 @@ def get_content():
             card_props = get_card_properties(*card_api_key)
             with img_col:
                 side_idx = render_card_img_tab(card_props)
-            if deck_active_tab == 'Card overview':
+            if deck_active_tab == 'Card info':
                 text_field = get_card_description(card_props, side_idx)
                 prop_col.markdown(text_field)
             if deck_active_tab == 'Edit card':

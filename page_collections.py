@@ -23,7 +23,7 @@ def get_content():
     if ('selected_list_card' not in st.session_state) or \
         (
             (st.session_state.get('selected_list_card') is not None) and
-            (st.session_state.get('v_list_tab_bar') not in ['Card overview', 'Edit card'])
+            (st.session_state.get('v_list_tab_bar') not in ['Card info', 'Edit card'])
         ):
             st.session_state.selected_list_card = None
     elif check_match_selected_card_and_set('Edit card', 'selected_list_card'):
@@ -149,7 +149,7 @@ def get_content():
                     if value == True:
                         st.session_state.selected_list_card = card_id \
                             [card_id_cols]
-                        st.session_state.v_list_tab_bar = 'Card overview'
+                        st.session_state.v_list_tab_bar = 'Card info'
                     else:
                         st.session_state.selected_list_card = None
                         st.session_state.v_list_tab_bar = 'Collection info'
@@ -195,9 +195,7 @@ def get_content():
                 'mana_cost': st.column_config.TextColumn(
                     'Cost', help='Mana cost'
                 ),
-                'foil': st.column_config.CheckboxColumn(
-                    'Foil', help='Foil'
-                ),
+                'foil': None,
                 'condition_code': None,
                 'create_ns': None,
                 'open': st.column_config.CheckboxColumn(
@@ -206,7 +204,7 @@ def get_content():
             },
             disabled=[
                 'name', 'type', 'language_code', 'set_code', 'rarity', 
-                'mana_cost', 'foil', 'condition_code']
+                'mana_cost', 'condition_code']
             ,
             on_change=update_table_content_wrapper,
             kwargs={
@@ -259,8 +257,8 @@ def get_content():
         collection_tabs = ['Collection info', 'Add cards']
         default_tab = 'Collection info'
         if st.session_state.selected_list_card is not None:
-            collection_tabs += ['Card overview', 'Edit card']
-            default_tab = 'Card overview'
+            collection_tabs += ['Card info', 'Edit card']
+            default_tab = 'Card info'
         collection_active_tab = show_tab_bar(
             collection_tabs,
             tabs_size=[1.2, 1, 1, 0.8],
@@ -441,7 +439,7 @@ def get_content():
             card_props = get_card_properties(*card_api_key)
             with img_col:
                 side_idx = render_card_img_tab(card_props)
-            if collection_active_tab == 'Card overview':
+            if collection_active_tab == 'Card info':
                 text_field = get_card_description(card_props, side_idx)
                 prop_col.markdown(text_field)
             if collection_active_tab == 'Edit card':
