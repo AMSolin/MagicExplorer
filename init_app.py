@@ -244,6 +244,23 @@ def reset_table_languages():
 
 def reset_table_cards():
     #NOTE https://stackoverflow.com/questions/50376345/python-insert-uuid-value-in-sqlite3
+    def color_extractor(mana_cost: str):
+        if mana_cost is not None:
+            colors = []
+            mana_cost = mana_cost[1:] \
+                .replace('}', '') \
+                .replace('/', '{') \
+                .split('{')
+            for symbol in set(mana_cost):
+                if symbol in ['B', 'G', 'R', 'U', 'W', 'C']:
+                    colors.append(symbol)
+            if (len(colors) == 0) & ((symbol == 'X') | (symbol.isdigit())):
+                colors.append('X')
+            colors = ''.join(sorted(colors))
+        else:
+            colors = ''
+        return colors
+    
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
@@ -267,13 +284,14 @@ def reset_table_cards():
             c.type,
             c.types,
             c.rarity,
-            c.colors,
             c.power,
-            c.toughness
+            c.toughness,
+            c.text
         from
             ap.cards as c
             join ap.cardidentifiers as i on c.uuid = i.uuid
     """) \
+        .assign(colors=lambda df: df['mana_cost'].apply(lambda x:color_extractor(x))) \
         .assign(card_uuid=lambda df: df['card_uuid'].apply(lambda x:uuid.UUID(x))) \
         .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
 
@@ -288,13 +306,14 @@ def reset_table_cards():
             side text,
             language text,
             mana_cost text,
-            mana_value text,
+            mana_value real,
             type text,
             types text,
             rarity text,
             colors text,
             power text,
-            toughness text
+            toughness text,
+            text text
         )
     """)
     csr.execute(create_table_ddl('cards_temp'))

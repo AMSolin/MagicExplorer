@@ -48,33 +48,80 @@ def display_toasts():
             st.toast(st.session_state.last_actions.pop(0))
 
 @st.cache_data
-def search_cards(
-    name='', cmc=(0, 15), type='', color=''
-):
-    cmc_cond = f'c.CMC between {cmc[0]} and {cmc[1]}' if cmc != (0, 15) else '1=1'
-    name_cond = f' and c.name like "%{name}%"' if name != '' else ''
-    type_cond = f' and c.Type like "%{type}%"' if type != '' else ''
-    color_cond = f' and c.Color like "{color}"' if color != '' else ''
-    colorless_cond = 'and c.Color is null' if color is None else ''
+def search_cards(search_params: dict):
+    where_clause = ["coalesce(c.side, 'a') = 'a'"]
+    if color_list := search_params['color_list']:
+        colors = ''.join(sorted(color_list))
+        if search_params['multicolor_option'] == 'With a chosen color(s)':
+            expr = f"c.colors GLOB '*[{colors}]*'"
+        elif search_params['multicolor_option'] == 'Any of the chosen color(s)':
+            all_colors = ['B', 'G', 'R', 'U', 'W', 'C', 'X']
+            other_colors = ''.join(
+                sorted(list(set(all_colors).difference(set(color_list))))
+            )
+            expr = f"c.colors not GLOB '*[{other_colors}]*'"
+        elif search_params['multicolor_option'] == 'All of the chosen color(s)':
+            expr = f"c.colors GLOB '{colors}'"
+        where_clause.append(expr)
+    if rarity_list := search_params['rarity_list']:
+        rarity = "', '".join(rarity_list)
+        expr = f"c.rarity in ('{rarity}')"
+        where_clause.append(expr)
+    for key in ['name', 'type', 'text']:
+        if value := search_params[f'card_{key}']:
+            expr = f'c.{key} like "%{value}%"'
+            where_clause.append(expr)
+    for key in ['mana_value', 'power', 'toughness']:
+        if value := search_params[f'{key}_val']:
+            operator = search_params[f'{key}_op']
+            expr = f'c.{key} {operator} {value}'
+            where_clause.append(expr)
+
     query = f"""
-    select 
-        Name,
-        Type,
-        cast(CMC as int) as CMC,
-        Color,
-        Rarity,
-        "image url" as "image_url"
-    from collection as c
-    where
-    {cmc_cond + name_cond + type_cond + color_cond + colorless_cond}
-    order by
-        name
+        select distinct
+            name,
+            type,
+            mana_cost,
+            (power || ' / ' || toughness) as pt
+            --concat(power, ' / ',toughness) as pt
+        from cards as c
+        where
+        {' and '.join(where_clause)}
+        -- add condition by side
+        order by
+            name
+
     """
-    with sqlite3.connect('./data/mtg.db') as conn:
-        result = pd.read_sql(query, conn)
-    # symbol_conv = {'{R}': ':fire:', '{U}': ':droplet:'}
-    # result['Cost'] = result['Cost'].replace(symbol_conv)
-    result['image_url'] = result['image_url'].fillna('https://upload.wikimedia.org/wikipedia/en/thumb/a/aa/Magic_the_gathering-card_back.jpg/220px-Magic_the_gathering-card_back.jpg')
+    csr = Db('app_data.db')
+    result = csr.read_sql(query).assign(create_ns = str(time.time_ns()))
+    return result
+
+def search_cards_in_lc(name):
+    csr = Db('user_data.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            coalesce(fd.name, ca.name) as name,
+            li.name as list_name,
+            lc.qnty
+        from list_content as lc
+        left join lists as li
+            on lc.list_id = li.list_id
+        left join cards as ca
+            on lc.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on lc.card_uuid = fd.card_uuid and lc.language = fd.language
+        left join sets as se
+            on ca.set_code = se.set_code
+        left join languages as la
+            on lc.language = la.language
+        where
+            coalesce(fd.name, ca.name) = '{name}'
+            and coalesce(ca.side, 'a') = 'a'
+        order by ca.name
+    """)
+    result['create_ns'] = str(time.time_ns())
     return result
 
 def to_lower_and_substring_search(substr_card: str):

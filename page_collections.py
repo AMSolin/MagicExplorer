@@ -179,11 +179,11 @@ def get_content():
                     'Q', min_value=0, step=1, help='Quantity'
                 ),
                 'name': st.column_config.TextColumn(
-                    'Name', help='Card name'
+                    'Name', help='Card name', width='medium'
                 ),
                 'card_number': None,
                 'type': st.column_config.TextColumn(
-                    'Type', help='Card type'
+                    'Type', help='Card type', width='medium'
                 ),
                 'set_code': st.column_config.TextColumn(
                     'Set', help='Set'

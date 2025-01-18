@@ -231,15 +231,15 @@ def get_content():
                         'card_uuid': None,
                         'language': None,
                         'qnty': st.column_config.NumberColumn(
-                            'Q', min_value=0, step=1, help='Quantity'
+                            'QNTY', help='Quantity',
                         ),
                         'name': st.column_config.TextColumn(
-                            'Name', help='Card name'
-                        ), #TODO display in native card language
+                            'Name', help='Card name', width='medium'
+                        ),
                         'card_number': None,
                         'type': st.column_config.TextColumn(
-                            'Type', help='Card type'),
-                        #TODO display in native card language
+                            'Type', help='Card type', width='medium'
+                        ),
                         'set_code': st.column_config.TextColumn(
                             'Set', help='Set'
                         ),
@@ -260,12 +260,12 @@ def get_content():
                         )
                     },
                     column_order=[
-                        'qnty', 'is_commander', 'name','type', 'set_code',
-                        'mana_cost', 'deck_type_name', 'open'
+                        'is_commander', 'name','type', 'set_code',
+                        'mana_cost', 'deck_type_name', 'qnty', 'open'
                     ],
                     disabled=[
-                        'name', 'type', 'language_code', 'set_code', 'rarity', 
-                        'mana_cost', 'is_commander', 'condition_code'
+                        col for col in deck_type_content.columns
+                        if col not in ['open', 'deck_type_name']
                     ],
                     on_change=update_table_content_wrapper,
                     kwargs={
@@ -404,45 +404,48 @@ def get_content():
             )
 
         if deck_active_tab == 'Deck builder':
-            with st.expander('Search options', icon=":material/manage_search:"):
-                search_form = st.form('search_form', border=False)
             color_map = {
-                'w': ":material/sunny:",
-                'g': ":material/nature:",
-                'r': ":material/local_fire_department:",
-                'u': ":material/water_drop:",
-                'b': ":material/skull:",
-                'c': ":material/stat_0:",
-                'z': ":material/counter_9:",
-                'l': ":material/landscape_2:",
+                'W': ":material/sunny:",
+                'G': ":material/nature:",
+                'R': ":material/local_fire_department:",
+                'U': ":material/water_drop:",
+                'B': ":material/skull:",
+                'C': ":material/stat_0:",
+                'X': ":material/counter_9:"
             }
             rarity_map = {
-                'c': "**:gray-background[C]**",
-                'u': "**:blue-background[U]**",
-                'r': "**:orange-background[R]**",
-                'm': "**:red-background[M]**",
-                's': "**:rainbow-background[S]**",
+                'common': "**:gray-background[C]**",
+                'uncommon': "**:blue-background[U]**",
+                'rare': "**:orange-background[R]**",
+                'mythic': "**:red-background[M]**",
+                'special': "**:rainbow-background[S]**"
  
             }
+            search_params = {}
+            with st.expander(
+                'Search options',
+                expanded=st.session_state.get('expand_search_form', True),
+                icon=":material/manage_search:"
+            ):
+                search_form = st.form('search_form', border=False)
             pills_col, multicolor_col = search_form.columns([0.5, 0.5])
-            color_list = pills_col.pills(
-                'Card colors:',
+            search_params['color_list'] = pills_col.pills(
+                'Mana cost colors:',
                 options=color_map.keys(),
                 selection_mode='multi',
                 format_func=lambda option_key: color_map[option_key],
-                help='White, Green, Red, Blue, Black, Colorless, No color, Land'
+                help='White, Green, Red, Blue, Black, Colorless, No color'
             )
-
-            multicolor_option = multicolor_col.selectbox(
-                label='Multicolored options:',
+            search_params['multicolor_option'] = multicolor_col.selectbox(
+                label='Color options:',
                 options=[
-                    'With multicolored',
-                    'Without multicolored',
-                    'Multicolored only',
-                ],
+                    'With a chosen color(s)',
+                    'Any of the chosen color(s)',
+                    'All of the chosen color(s)'
+                ]
             )
 
-            rarity_list = pills_col.segmented_control(
+            search_params['rarity_list'] = pills_col.segmented_control(
                 'Card rarity:',
                 options=rarity_map.keys(),
                 selection_mode='multi',
@@ -450,20 +453,92 @@ def get_content():
                 help='Common, Uncommon, Rare, Mythic, Special'
             )
 
-            text_col, _, op_col, val_col = search_form.columns([0.48, 0.02, 0.25, 0.25])
+            text_col, _, op_col, val_col = search_form \
+                .columns([0.48, 0.02, 0.25, 0.25])
 
-            card_name = text_col.text_input('Card name:')
-            card_type = text_col.text_input('Card type:')
-            card_text = text_col.text_input('Card text:')
+            search_params['card_name'] = text_col.text_input('Card name:')
+            search_params['card_type'] = text_col.text_input('Card type:')
+            search_params['card_text'] = text_col.text_input('Card text:')
 
             operators = ['>=', '>', '=', '<', '<=']
-            op_col.selectbox('Mana', operators, key='w_cmc_op')
-            val_col.number_input('value', value=None, step=1, key='w_cmc_val')
-            op_col.selectbox('Power', operators, key='w_pwr_op')
-            val_col.number_input('value', value=None, step=1, key='w_pwr_val')
-            op_col.selectbox('Toughness', operators, key='w_tgns_op')
-            val_col.number_input('value', value=None, step=1, key='w_tgns_val')
-            search_form.form_submit_button('Search', icon=":material/search:")
+            search_params['mana_value_op'] = op_col.selectbox(
+                'CMC', operators, key='w_mana_value_op'
+            )
+            search_params['mana_value_val'] = val_col.number_input(
+                'value', value=None, step=1, key='w_mana_value_val'
+            )
+            search_params['power_op'] = op_col.selectbox(
+                'Power', operators, key='w_power_op'
+            )
+            search_params['power_val'] = val_col.number_input(
+                'value', value=None, step=1, key='w_power_val'
+            )
+            search_params['toughness_op'] = op_col.selectbox(
+                'Toughness', operators, key='w_toughness_op'
+            )
+            search_params['toughness_val'] = val_col.number_input(
+                'value', value=None, step=1, key='w_toughness_val'
+            )
+            
+            def _close_expander():
+                st.session_state.expand_search_form = False
+
+            search_button = search_form.form_submit_button(
+                'Search',
+                on_click=_close_expander,
+                icon=":material/search:"
+            )
+            
+            if search_button or 'search_result_card' in st.session_state:
+                df_search_result = search_cards(search_params) \
+                    .assign(open=False)
+                if 'search_result_card' in st.session_state:
+                    mask = (
+                        df_search_result['name'] == \
+                            st.session_state.search_result_card['name']
+                    )
+                    df_search_result.loc[mask, 'open'] = True
+                def search_result_callback():
+                    changes = [
+                        (ix, [(col, val) for col, val in pair.items()])
+                        for ix, pair in st.session_state.w_search_result['edited_rows'].items()
+                    ]
+                    ix, [[col, val]]= changes[0]
+
+                    if col == 'open':
+                        st.session_state.search_result_card = df_search_result.iloc[ix]
+                    else:
+                        st.session_state.search_result_card = None
+
+                _ = st.data_editor(
+                    df_search_result, 
+                    key='w_search_result',
+                    hide_index=True,
+                    column_config={
+                        'name': st.column_config.TextColumn(
+                            'Name', width='medium', help='Deck name'
+                        ),
+                        'type': st.column_config.TextColumn(
+                            'Type', width='medium',help='Card type'
+                        ),
+                        'mana_cost': st.column_config.TextColumn(
+                            'Cost', help='Mana cost'
+                        ),
+                        'pt': st.column_config.TextColumn(
+                            'P / T', help='Power / Toughness'
+                        ),
+                        'create_ns': None,
+                        'open': st.column_config.CheckboxColumn(
+                            'Open', help="Open collections"
+                        )
+                    },
+                    on_change=search_result_callback
+                )
+                if 'search_result_card' in st.session_state:
+                    df_lists = search_cards_in_lc(
+                        st.session_state.search_result_card['name']
+                    )
+                    st.dataframe(df_lists.assign(Add=False))
 
         if deck_active_tab == 'Add cards':
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
@@ -587,8 +662,6 @@ def get_content():
                         st.session_state.selected_deck_card,
                         update_table_content_wrapper
                     )
-
-
 
 
 
