@@ -532,6 +532,7 @@ def get_content():
                             'Open', help="Open collections"
                         )
                     },
+                    disabled=[c for c in df_search_result.columns if c != 'open'],
                     on_change=search_result_callback
                 )
                 if 'search_result_card' in st.session_state:

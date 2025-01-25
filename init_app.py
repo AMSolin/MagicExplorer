@@ -242,25 +242,110 @@ def reset_table_languages():
             ('Phyrexian', 'ph');
     """)
 
+def _color_extractor(mana_cost: str):
+    if mana_cost is not None:
+        colors = []
+        mana_cost = mana_cost[1:] \
+            .replace('}', '') \
+            .replace('/', '{') \
+            .split('{')
+        for symbol in set(mana_cost):
+            if symbol in ['B', 'G', 'R', 'U', 'W', 'C']:
+                colors.append(symbol)
+        if (len(colors) == 0) & ((symbol == 'X') | (symbol.isdigit())):
+            colors.append('X')
+        colors = ''.join(sorted(colors))
+    else:
+        colors = ''
+    return colors
+
+def reset_table_card_unique_metadata():
+    #NOTE https://stackoverflow.com/questions/50376345/python-insert-uuid-value-in-sqlite3
+    sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
+    sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
+    csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
+    csr.executescript(
+    """
+        attach database './import/AllPrintings.sqlite' as ap;
+        attach database './data/app_data.db' as ad;
+    """)
+    df_import = csr.read_sql(
+    """
+        select distinct
+            c1.name,
+            i1.scryfallOracleId as card_common_id,
+            c1.manacost as mana_cost,
+            c1.manavalue as mana_value,
+            c1.type,
+            c1.rarity,
+            c1.power,
+            c1.toughness,
+            c1.text,
+            1 as search_priority
+        from
+            ap.cards as c1
+        inner join ap.cardidentifiers as i1 on c1.uuid = i1.uuid
+        union all
+        select distinct
+            f.name,
+            i2.scryfallOracleId as card_common_id,
+            c2.manacost as mana_cost,
+            c2.manavalue as mana_value,
+            f.type,
+            c2.rarity,
+            c2.power,
+            c2.toughness,
+            f.text,
+            2 as search_priority
+        from
+            ap.cardForeignData as f
+        inner join ap.cards as c2 on f.uuid = c2.uuid
+        inner join ap.cardidentifiers as i2 on f.uuid = i2.uuid
+    """) \
+        .assign(colors=lambda df: df['mana_cost'].apply(lambda x:_color_extractor(x))) \
+        .assign(card_common_id=lambda df: df['card_common_id'].apply(lambda x:uuid.UUID(x))) \
+        .assign(power=lambda df: df['power'].str.replace('*', '★')) \
+        .assign(toughness=lambda df: df['toughness'].str.replace('*', '★')) \
+        .fillna('')
+
+    create_table_ddl = lambda table_name: (
+    f"""
+        create table {table_name} (
+            name text,
+            card_common_id guid,
+            mana_cost text,
+            mana_value real,
+            type text,
+            rarity text,
+            colors text,
+            power text,
+            toughness text,
+            text text,
+            search_priority integer
+        )
+    """)
+    table_name = 'card_unique_metadata'
+    temp_table_name = table_name + '_temp'
+    csr.execute(create_table_ddl(temp_table_name))
+    columns = csr.read_sql(f'select * from {temp_table_name}').columns
+    csr.executemany(
+        f"""
+            insert into {temp_table_name} ({', '.join(columns)})
+            values ({', '.join('? ' for _ in range(len(columns)))})
+        """,
+        df_import[columns].values
+    )
+    csr.executescript(
+    f"""
+        drop table if exists ad.{table_name};
+        {create_table_ddl(f'ad.{table_name}')};
+        insert into ad.{table_name} ({', '.join(columns)})
+        select {', '.join(columns)}
+        from {temp_table_name}
+    """)
+
 def reset_table_cards():
     #NOTE https://stackoverflow.com/questions/50376345/python-insert-uuid-value-in-sqlite3
-    def color_extractor(mana_cost: str):
-        if mana_cost is not None:
-            colors = []
-            mana_cost = mana_cost[1:] \
-                .replace('}', '') \
-                .replace('/', '{') \
-                .split('{')
-            for symbol in set(mana_cost):
-                if symbol in ['B', 'G', 'R', 'U', 'W', 'C']:
-                    colors.append(symbol)
-            if (len(colors) == 0) & ((symbol == 'X') | (symbol.isdigit())):
-                colors.append('X')
-            colors = ''.join(sorted(colors))
-        else:
-            colors = ''
-        return colors
-    
     sqlite3.register_adapter(uuid.UUID, lambda u: u.bytes_le)
     sqlite3.register_converter('guid', lambda b: uuid.UUID(bytes_le=b))
     csr = Db(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
@@ -276,23 +361,19 @@ def reset_table_cards():
             c.name,
             c.number,
             c.setcode as set_code,
+            i.scryfallOracleId as card_common_id,
             i.scryfallid as scryfall_id,
             c.side,
             c.language,
             c.manacost as mana_cost,
-            c.manavalue as mana_value,
             c.type,
-            c.types,
-            c.rarity,
-            c.power,
-            c.toughness,
-            c.text
+            c.rarity
         from
             ap.cards as c
             join ap.cardidentifiers as i on c.uuid = i.uuid
     """) \
-        .assign(colors=lambda df: df['mana_cost'].apply(lambda x:color_extractor(x))) \
         .assign(card_uuid=lambda df: df['card_uuid'].apply(lambda x:uuid.UUID(x))) \
+        .assign(card_common_id=lambda df: df['card_common_id'].apply(lambda x:uuid.UUID(x))) \
         .assign(scryfall_id=lambda df: df['scryfall_id'].apply(lambda x:uuid.UUID(x)))
 
     create_table_ddl = lambda table: (
@@ -302,18 +383,13 @@ def reset_table_cards():
             name text,
             number text,
             set_code text,
+            card_common_id guid,
             scryfall_id guid,
             side text,
             language text,
             mana_cost text,
-            mana_value real,
             type text,
-            types text,
-            rarity text,
-            colors text,
-            power text,
-            toughness text,
-            text text
+            rarity text
         )
     """)
     csr.execute(create_table_ddl('cards_temp'))

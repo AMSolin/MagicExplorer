@@ -49,7 +49,7 @@ def display_toasts():
 
 @st.cache_data
 def search_cards(search_params: dict):
-    where_clause = ["coalesce(c.side, 'a') = 'a'"]
+    where_clause = []
     if color_list := search_params['color_list']:
         colors = ''.join(sorted(color_list))
         if search_params['multicolor_option'] == 'With a chosen color(s)':
@@ -69,7 +69,7 @@ def search_cards(search_params: dict):
         where_clause.append(expr)
     for key in ['name', 'type', 'text']:
         if value := search_params[f'card_{key}']:
-            expr = f'c.{key} like "%{value}%"'
+            expr = f'lower_udf(c.{key}) like "%{value}%"'
             where_clause.append(expr)
     for key in ['mana_value', 'power', 'toughness']:
         if value := search_params[f'{key}_val']:
@@ -78,21 +78,37 @@ def search_cards(search_params: dict):
             where_clause.append(expr)
 
     query = f"""
-        select distinct
+        select
             name,
             type,
             mana_cost,
-            (power || ' / ' || toughness) as pt
-            --concat(power, ' / ',toughness) as pt
-        from cards as c
-        where
-        {' and '.join(where_clause)}
-        -- add condition by side
+            case
+                when power <> ''
+                    then (power || ' / ' || toughness)
+                else ''
+            end as pt
+        from (
+            select
+                name,
+                type,
+                mana_cost,
+                power,
+                toughness,
+                row_number() over (
+                    partition by c.card_common_id
+                    order by search_priority
+                ) as row_number
+            from card_unique_metadata as c
+            where {' and '.join(where_clause)}
+        ) as t
+        where row_number = 1
         order by
             name
-
     """
     csr = Db('app_data.db')
+    def sqlite_lower(value_):
+            return value_.lower()
+    csr.conn.create_function("lower_udf", 1, sqlite_lower)
     result = csr.read_sql(query).assign(create_ns = str(time.time_ns()))
     return result
 

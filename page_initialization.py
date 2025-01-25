@@ -12,6 +12,7 @@ def get_content():
         ('card_condition', 'app_data.db', reset_table_card_condition),
         ('deck_types', 'app_data.db', reset_table_deck_types),
         ('card_names', 'app_data.db', reset_table_card_names),
+        ('card_unique_metadata', 'app_data.db', reset_table_card_unique_metadata),
         ('sets', 'app_data.db', reset_table_sets),
         ('languages', 'app_data.db', reset_table_languages),
         ('cards', 'app_data.db', reset_table_cards),
