@@ -935,6 +935,8 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             name text,
             type text,
             selected integer default 1,
+            owner text default null,
+            parent_list text default null,
             creation_date integer
         );
         create unique index temp_db.idx_list_content
@@ -1034,6 +1036,26 @@ def check_for_duplicates():
         msg += f'Deck {row[0]} already exists!  \n'
     msg += 'Import aborted!' if len(msg) > 0 else ''
     return msg
+
+def get_import_content(import_list_id):
+    csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            coalesce(fd.name, ca.name) as name,
+            ic.qnty
+        from import_cards as ic
+        left join cards as ca
+            on ic.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on ic.card_uuid = fd.card_uuid and ic.language = fd.language
+        where
+            ic.import_list_id = {import_list_id}
+            and coalesce(ca.side, 'a') = 'a'
+    """)
+    result['create_ns'] = str(time.time_ns())
+    return result
 
 def import_delver_lens_cards(list_for_duplicate: str=None):
     csr = Db('temp/temp_db.db')
