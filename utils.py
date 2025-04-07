@@ -830,13 +830,16 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             lists._id as import_list_id,
             lists.name as name,
             case
-                when lists.category = 1
+                when lists.category in (1, 3)
                     then 'Collection'
                 when lists.category = 2
                     then 'Deck'
-                when lists.category = 3
-                    then 'Wish list'
             end as type,
+            case
+                when lists.category = 3
+                    then 1
+                else 0
+            end as is_wished,
             cast(substr(lists.creation, 1, 10) as integer) as creation_date
         from exp_db.cards as cards
         left join exp_db.lists as lists
@@ -857,7 +860,8 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             qnty integer,
             import_list_id integer,
             name text,
-            type integer,
+            type text,
+            is_wished integer,
             creation_date integer
         )
     """)
@@ -934,7 +938,10 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             import_list_id integer,
             name text,
             type text,
+            is_wished integer,
             selected integer default 1,
+            owner text default null,
+            parent_list text default null,
             creation_date integer
         );
         create unique index temp_db.idx_list_content
@@ -972,6 +979,9 @@ def get_import_names():
         import_list_id,
         name,
         type,
+        is_wished,
+        owner,
+        parent_list,
         creation_date
     from import_lists
     order by import_list_id
@@ -1035,6 +1045,26 @@ def check_for_duplicates():
     msg += 'Import aborted!' if len(msg) > 0 else ''
     return msg
 
+def get_import_content(import_list_id):
+    csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            coalesce(fd.name, ca.name) as name,
+            ic.qnty
+        from import_cards as ic
+        left join cards as ca
+            on ic.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on ic.card_uuid = fd.card_uuid and ic.language = fd.language
+        where
+            ic.import_list_id = {import_list_id}
+            and coalesce(ca.side, 'a') = 'a'
+    """)
+    result['create_ns'] = str(time.time_ns())
+    return result
+
 def import_delver_lens_cards(list_for_duplicate: str=None):
     csr = Db('temp/temp_db.db')
     csr.execute("attach database './data/user_data.db' as ud")
@@ -1074,7 +1104,7 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
         select name, creation_date, import_list_id, type
         from import_lists
         where
-            type in ('Collection', 'Wish list')
+            type = 'Collection'
             and selected = 1
     """
     ).fetchall()
@@ -1099,7 +1129,7 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
         select name, creation_date, import_list_id, type
         from import_lists
         where
-            type in ('Deck', 'Wish deck')
+            type = 'Deck'
             and selected = 1
     """
     ).fetchall()
