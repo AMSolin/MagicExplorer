@@ -15,14 +15,16 @@ def get_content():
                 key='v_ut_db_uploader',
                 type='db'
                 )
-            button_state = False if dlens_db and ut_db else True
-            submitted = st.button('Import', disabled=button_state)
+            button_block = False if dlens_db and ut_db else True
+            submitted = st.button('Import', disabled=button_block)
             if submitted and dlens_db and ut_db:
                 dlens_db_path, ut_db_path = save_to_temp_dir(dlens_db, ut_db)
                 temp_import_delver_lens_cards(dlens_db_path, ut_db_path)
                 check_for_tokens()
                 st.session_state.s_selected_lists = True
                 st.rerun()
+            else:
+                return
         else:
             df_delver_lists = get_import_names() \
                 .assign(open=False)
@@ -42,58 +44,32 @@ def get_content():
                         .iloc[ix].loc['import_list_id']
                 else:
                     list_id = df_delver_lists.iloc[ix].loc['import_list_id']
-                    try:
-                        val = int(val) if col == 'selected' else val
-                        update_table(
-                            'import_list', list_id, col, val, db_path='temp/temp_db.db'
-                        )
-                    except sqlite3.IntegrityError:
-                        if col == 'type':
-                            type = val
-                            name = df_delver_lists.iloc[ix].loc['name']
-                        else:
-                            type = df_delver_lists.iloc[ix].loc['type']
-                            name = val
-                        table_container.error(f'{type} "{name}" already exist!')
+                    update_table(
+                        'import_list', list_id, col, int(val), db_path='temp/temp_db.db'
+                    )
             table_container = st.container()
             st.session_state.df_delver_lists = table_container.data_editor(
                 df_delver_lists,
                 key='v_delver_lists',
                 hide_index=True,
                 column_config={
-                    'selected': st.column_config.CheckboxColumn("✔"),
-                    'type': st.column_config.SelectboxColumn(
-                        'Type',
-                        options=['Collection', 'Wish list','Deck', 'Wish deck'],
-                        required=True,  width='small'
+                    'selected': st.column_config.CheckboxColumn(
+                        '✔', help='check for import to collection / deck'
                     ),
-                    'name': st.column_config.TextColumn('Name', width='medium'),
-                    'open': st.column_config.CheckboxColumn('Open'),
+                    'name': st.column_config.TextColumn(
+                        'Name', width='medium', help='Collection / deck name'
+                    ),
+                    'open': st.column_config.CheckboxColumn(
+                        'Open', help='Open collection / deck '
+                    ),
                 },
-                column_order=['selected', 'name', 'type', 'open'],
+                column_order=['selected', 'name', 'open'],
                 on_change=list_callback
             )
-            copy_decks = st.checkbox(
-                'Copy decks content into collection'
-            )
-            if copy_decks:
-                s_lists = pd.concat(
-                    [get_lists()['name'],
-                    df_delver_lists[df_delver_lists['type'] =='Collection']['name']],
-                    axis=0,
-                    ignore_index=True
-                )
-                list_for_duplicate = st.selectbox(
-                    'Choose target collection',
-                    options=s_lists,
-                    key='v_list_for_duplicate',
-                )
-            else:
-                list_for_duplicate = None
             col1, col2 = st.columns(2)
-            discard_button = col2.button('Discard import')
+            discard_button = col2.button('Discard import', type='primary')
             if discard_button:
-                del st.session_state.s_selected_lists
+                del st.session_state.s_selected_lists, st.session_state.current_list_id
                 st.rerun()
             import_button = col1.button('Import')
             if import_button:
@@ -101,5 +77,167 @@ def get_content():
                 if len(msg) > 0:
                     table_container.error(msg)
                 else:
-                    import_delver_lens_cards(list_for_duplicate)
+                    import_delver_lens_cards()
                     st.rerun()
+    
+    table_side, overview_side = st.columns((0.6, 0.4))
+    with table_side:
+        _ = st.dataframe(
+                    df_delver_lists.drop(columns=['create_ns']),
+                    # key=f'w_import_content',
+                    hide_index=True,
+                    use_container_width=False,
+                    # column_order=['name','qnty'],
+                )
+        df_import_content = get_import_content(
+            st.session_state.current_list_id
+        )
+        _ = st.dataframe(
+                    df_import_content,
+                    key=f'w_import_content',
+                    hide_index=True,
+                    use_container_width=False,
+                    column_order=['name','qnty'],
+                )
+    with overview_side:
+
+        import_list_id, name, import_type, note, owner, \
+            parent_list, creation_date =  df_delver_lists \
+            .loc[
+                mask_list,
+                [
+                    'import_list_id', 'name', 'type', 'note','owner',
+                    'parent_list', 'creation_date'
+                ]
+            ] \
+            .values.ravel()
+        
+        def update_table_wrapper(**kwargs):
+            try:
+                update_table(**kwargs)
+            except sqlite3.IntegrityError:
+                name_container.error(
+                    f'{import_type} {st.session_state.w_import_name} already exist!'
+                )
+                st.session_state.w_import_name = name
+        
+        name_container = st.container()
+        col_name, col_type = st.columns([0.7, 0.3])
+        
+        if 'w_import_name' not in st.session_state:
+            st.session_state.w_import_name = name
+        _ = col_name.text_input(
+            'Name:',
+            key='w_import_name',
+            on_change=update_table_wrapper,
+            kwargs={
+                'entity': 'import_list',
+                'id': import_list_id,
+                'column': 'name',
+                'value': 'st.session_state.w_import_name',
+                'db_path': 'temp/temp_db.db'
+            }
+        )
+
+        type_options = ['Deck', 'Collection']
+        _ = col_type.selectbox(
+            'Type:',
+            options=type_options,
+            index=type_options.index(import_type),
+            key='w_import_type',
+            placeholder='Choose type',
+            on_change=update_table_wrapper,
+            kwargs={
+                'entity': 'import_list',
+                'id': import_list_id,
+                'column': 'type',
+                'value': 'st.session_state.w_import_type',
+                'db_path': 'temp/temp_db.db'
+            }
+        )
+        import_tabs = [f'{import_type} info']
+        default_tab = f'{import_type} info'
+        # if st.session_state.selected_import_card is not None:
+        #     import_tabs += ['Card info', 'Edit card']
+        #     default_tab = 'Card info'
+        deck_active_tab = show_tab_bar(
+            import_tabs,
+            tabs_size=[1.2, 1, 1, 0.8],
+            default=default_tab,
+            key='w_delver_import_tab_bar'
+        )
+
+        # if deck_active_tab == f'{timport_typeype} info':
+        #     col_owner, col_creation_date, col_wish_deck = \
+        #         st.columns([0.4, 0.3, 0.3])
+        #     df_players = get_players()[['player_id', 'name']]
+        #     if owner is not None:
+        #         idx = int(
+        #             df_players[
+        #                 df_players['player_id'] == player_id
+        #             ].index[0]
+        #         )
+        #     else:
+        #         idx = None
+        #     _ = col_owner.selectbox(
+        #         'Owner:',
+        #         options=df_players['player_id'],
+        #         format_func=lambda x: dict(df_players.values)[x],
+        #         index=idx,
+        #         key='v_deck_owner',
+        #         placeholder='Choose owner',
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'default_value': None,
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'player_id',
+        #             'value': 'st.session_state.v_deck_owner'
+        #         }
+        #     )
+
+        #     _ = col_creation_date.date_input(
+        #         'Creation date:',
+        #         value=creation_dtm.to_pydatetime(),
+        #         format="DD.MM.YYYY",
+        #         key='v_deck_creation_date',
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'default_value': None,
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'creation_date',
+        #             'value': 'st.session_state.v_deck_creation_date'
+        #         }
+        #     )
+
+        #     col_wish_deck.write('')
+        #     col_wish_deck.write('')
+        #     _ = col_wish_deck.checkbox(
+        #         'Mark as wish deck',
+        #         value=is_wish_deck,
+        #         key='v_is_wish_deck',
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'is_wish_deck',
+        #             'value': 'int(st.session_state.v_is_wish_deck)'
+        #         }
+        #     )
+
+        #     _ = st.text_area(
+        #         'Deck note',
+        #         value=note,
+        #         key='v_deck_note',
+        #         placeholder='Add your notes here',
+        #         max_chars=256,
+        #         height=68,
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'note',
+        #             'value': 'st.session_state.v_deck_note'
+        #         }
+        #     )
