@@ -327,22 +327,22 @@ def generate_set_dict(
         [df_set_codes['row_number'] == 1] \
         [['set_code', 'keyrune_code', 'card_number', 'language', 'card_uuid', 'create_ns']]
     if selected_card is not None:
-        st.session_state[f'v_selected_{entity}_set'] = ' '.join(
+        st.session_state[f'w_selected_{entity}_set'] = ' '.join(
             selected_card.loc[['set_code', 'card_number', 'language', 'card_uuid', 'create_ns']] \
                 .apply(lambda x: x if isinstance(x, str) else x.hex()).values
         )
     for row in df_set_codes.itertuples():
         idx, set_code, keyrune_code, card_number, language, card_uuid, create_ns = row
         css_id = f'{set_code} {card_number} {language} {card_uuid.hex()} {create_ns}'
-        if f'v_selected_{entity}_set' not in st.session_state and idx == 0:
-            st.session_state[f'v_selected_{entity}_set'] = css_id
+        if f'w_selected_{entity}_set' not in st.session_state and idx == 0:
+            st.session_state[f'w_selected_{entity}_set'] = css_id
         sets_dict[css_id] = f'<a id="{css_id}" class="ss ss-{keyrune_code} ss-2x"></a> '
     return sets_dict
 
 def generate_css_set_icons(entity, sets_dict):
     css = '<link href="//cdn.jsdelivr.net/npm/keyrune@latest/css/keyrune.css" rel="stylesheet" type="text/css" />'
     for css_id, set_css in sets_dict.items():
-        if css_id.split(' ')[0] == st.session_state[f'v_selected_{entity}_set'].split(' ')[0]:
+        if css_id.split(' ')[0] == st.session_state[f'w_selected_{entity}_set'].split(' ')[0]:
             set_css = f'<span style="color: orange">{set_css}</span>'
         css+= set_css
     return css
@@ -362,7 +362,7 @@ def get_card_images(df, selected_set):
         set_code, card_number, lang = row
         card_props = get_card_properties(set_code, card_number, lang)
         if card_props.get('card_faces'):
-            side = st.radio('_', ['Front', 'Back'], label_visibility='hidden', horizontal=True, key=f'v_import_card_side {set_code} {card_number} {lang}')
+            side = st.radio('_', ['Front', 'Back'], label_visibility='hidden', horizontal=True, key=f'w_import_card_side {set_code} {card_number} {lang}')
             ix = 0 if side == 'Front' else 1
             uri = card_props['card_faces'][ix]['image_uris']['normal'] #TODO add change img with placeholder
         else:

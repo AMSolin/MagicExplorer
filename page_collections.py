@@ -13,9 +13,9 @@ def get_content():
     df_lists.loc[mask_list, 'open'] = True
 
     def check_match_selected_card_and_set(active_tab, card_key):
-        result = (st.session_state.get('v_list_tab_bar') == active_tab) \
+        result = (st.session_state.get('w_list_tab_bar') == active_tab) \
         and ((card_info := st.session_state.get(card_key)) is not None) \
-        and (selected_set := st.session_state.get('v_selected_list_set')) \
+        and (selected_set := st.session_state.get('w_selected_list_set')) \
         and (card_info.loc['set_code'] != selected_set.split(' ')[0]) \
         and (int(card_info.loc['create_ns']) <= int(selected_set.split(' ')[-1]))
         return result
@@ -23,20 +23,20 @@ def get_content():
     if ('selected_list_card' not in st.session_state) or \
         (
             (st.session_state.get('selected_list_card') is not None) and
-            (st.session_state.get('v_list_tab_bar') not in ['Card info', 'Edit card'])
+            (st.session_state.get('w_list_tab_bar') not in ['Card info', 'Edit card'])
         ):
             st.session_state.selected_list_card = None
     elif check_match_selected_card_and_set('Edit card', 'selected_list_card'):
-        _, _, language, card_uuid, _ = st.session_state.v_selected_list_set.split(' ')
+        _, _, language, card_uuid, _ = st.session_state.w_selected_list_set.split(' ')
         columns = ['language', 'card_uuid']
         values = [language, uuid.UUID(card_uuid).bytes]
         update_table_content(
-            'list', st.session_state.selected_list_card, columns, values
+            'list', columns, values, st.session_state.selected_list_card
         )
         st.session_state.selected_list_card.rename('need_update', inplace=True)
-        del st.session_state.v_selected_list_set
+        del st.session_state.w_selected_list_set
     elif check_match_selected_card_and_set('Add cards', 'searched_list_card'):
-        _, _, language, card_uuid, _ = st.session_state.v_selected_list_set.split(' ')
+        _, _, language, card_uuid, _ = st.session_state.w_selected_list_set.split(' ')
         st.session_state.searched_list_card = search_set_by_name(
             'ignore_name', language, card_uuid
         ).iloc[0]
@@ -47,23 +47,23 @@ def get_content():
         def list_callback():
             changes = [
                 (ix, [(col, val) for col, val in pair.items()])
-                for ix, pair in st.session_state.v_lists['edited_rows'].items()
+                for ix, pair in st.session_state.w_lists['edited_rows'].items()
             ]
             ix, [[col, val]]= changes[0]
             if col == 'open':
                 st.session_state.current_list_id = df_lists.iloc[ix].loc['list_id']
-                st.session_state.v_list_tab_bar = None
+                st.session_state.w_list_tab_bar = None
                 st.session_state.selected_list_card = None
             else:
                 list_id = df_lists.iloc[ix].loc['list_id']
                 try:
-                    update_table('list', list_id, col, val)
+                    update_table('list', col, val, list_id)
                 except sqlite3.IntegrityError:
                      table_container.error(f'Collection {val} already exist!')  
 
         _ = table_container.data_editor(
             df_lists, 
-            key='v_lists',
+            key='w_lists',
             hide_index=True,
             column_config={
                 'name': st.column_config.TextColumn(
@@ -141,7 +141,7 @@ def get_content():
                 # Если функция была вызвана при изменении таблицы
                 changes = [
                     (ix, [(column, value) for column, value in pair.items()])
-                    for ix, pair in st.session_state.v_list_content['edited_rows'].items()
+                    for ix, pair in st.session_state.w_list_content['edited_rows'].items()
                 ]
                 ix, [[column, value]]= changes[0]
                 card_id = df_list_content.iloc[ix]
@@ -149,14 +149,14 @@ def get_content():
                     if value == True:
                         st.session_state.selected_list_card = card_id \
                             [card_id_cols]
-                        st.session_state.v_list_tab_bar = 'Card info'
+                        st.session_state.w_list_tab_bar = 'Card info'
                     else:
                         st.session_state.selected_list_card = None
-                        st.session_state.v_list_tab_bar = 'Collection info'
-                    if 'v_selected_list_set' in st.session_state:
-                        del st.session_state.v_selected_list_set
+                        st.session_state.w_list_tab_bar = 'Collection info'
+                    if 'w_selected_list_set' in st.session_state:
+                        del st.session_state.w_selected_list_set
                     return
-                update_table_content('list', card_id, column, value)
+                update_table_content('list', column, value, card_id)
                 if (card_id['open']) and (column == 'qnty') and (value == 0):
                     st.session_state.selected_list_card = None
             else:
@@ -168,7 +168,7 @@ def get_content():
         
         _ = st.data_editor(
             df_list_content,
-            key='v_list_content',
+            key='w_list_content',
             height=843,
             hide_index=True,
             column_config={
@@ -229,22 +229,22 @@ def get_content():
                 update_table(**kwargs)
             except sqlite3.IntegrityError:
                 list_name_container.error(
-                    f'Collection {st.session_state.v_list_name} already exist!'
+                    f'Collection {st.session_state.w_list_name} already exist!'
                 )
-                st.session_state.v_list_name = list_name
+                st.session_state.w_list_name = list_name
         
         list_name_container = st.container()
         col_list_name, col_counter = list_name_container.columns((0.8, 0.2))
         _ = col_list_name.text_input(
             'Collection name:',
             value=list_name,
-            key='v_list_name',
+            key='w_list_name',
             on_change=update_table_wrapper,
             kwargs={
                 'entity': 'list',
-                'id': st.session_state.current_list_id,
                 'column': 'name',
-                'value': 'st.session_state.v_list_name'
+                'value': 'st.session_state.w_list_name',
+                'id': st.session_state.current_list_id
             }
         )
 
@@ -263,7 +263,7 @@ def get_content():
             collection_tabs,
             tabs_size=[1.2, 1, 1, 0.8],
             default=default_tab,
-            key='v_list_tab_bar'
+            key='w_list_tab_bar'
         )
 
         if collection_active_tab == 'Collection info':
@@ -282,69 +282,69 @@ def get_content():
                 options=df_players['player_id'],
                 format_func=lambda x: dict(df_players.values)[x],
                 index=idx,
-                key='v_list_owner',
+                key='w_list_owner',
                 placeholder='Choose owner',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'id': st.session_state.current_list_id,
                     'column': 'player_id',
-                    'value': 'st.session_state.v_list_owner'
+                    'value': 'st.session_state.w_list_owner',
+                    'id': st.session_state.current_list_id
                 }
             )
             _ = col_creation_date.date_input(
                 'Creation date:',
                 value=creation_dtm.to_pydatetime(),
                 format="DD.MM.YYYY",
-                key='v_creation_date',
+                key='w_creation_date',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'id': st.session_state.current_list_id,
                     'column': 'creation_date',
-                    'value': 'st.session_state.v_creation_date'
+                    'value': 'st.session_state.w_creation_date',
+                    'id': st.session_state.current_list_id
                 }
             )
             _ = col_owner.checkbox(
                 'Mark as primary collection',
                 disabled=bool(is_default_list),
                 value=is_default_list,
-                key='v_is_default_list',
+                key='w_is_default_list',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'id': st.session_state.current_list_id,
                     'column': 'is_default_list',
-                    'default_value': list_name
+                    'default_value': list_name,
+                    'id': st.session_state.current_list_id
                 }
             )
 
             _ = col_creation_date.checkbox(
                 'Mark as wish list',
                 value=is_wish_list,
-                key='v_is_wish_list',
+                key='w_is_wish_list',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'id': st.session_state.current_list_id,
                     'column': 'is_wish_list',
-                    'value': 'int(st.session_state.v_is_wish_list)'
+                    'value': 'int(st.session_state.w_is_wish_list)',
+                    'id': st.session_state.current_list_id
                 }
             )
 
             _ = st.text_area(
                 'Collection note',
                 value=note,
-                key='v_list_note',
+                key='w_list_note',
                 placeholder='Add your notes here',
                 max_chars=256,
-                height=10,
+                height=68,
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'list',
-                    'id': st.session_state.current_list_id,
                     'column': 'note',
-                    'value': 'st.session_state.v_list_note'
+                    'value': 'st.session_state.w_list_note',
+                    'id': st.session_state.current_list_id
                 }
             )
 
@@ -352,7 +352,7 @@ def get_content():
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
 
             def reset_searchbar():
-                del st.session_state.v_searched_list_card
+                del st.session_state.w_searched_list_card
 
             exact_match = exact_seach_box.checkbox(
                 'Exact match',
@@ -365,7 +365,7 @@ def get_content():
                 searched_list_card = st_searchbox(
                     search_function=searh_function,
                     placeholder="Enter card name",
-                    key="v_searched_list_card",
+                    key="w_searched_list_card",
                     clearable=True
                 )
             
@@ -418,8 +418,8 @@ def get_content():
                                 st.session_state.current_list_id
                             st.session_state.searched_list_card['qnty'] = qnty
                             update_table_content(
-                                'list', st.session_state.searched_list_card,
-                                'qnty', qnty
+                                'list', 'qnty', qnty,
+                                st.session_state.searched_list_card
                             )
                             st.rerun()
                 
@@ -453,13 +453,13 @@ def get_content():
                         df_lists['list_id'] == st.session_state.current_list_id
                         ].index[0]
                     ),
-                    key='v_card_list',
+                    key='w_card_list',
                     on_change=update_table_content_wrapper,
                     kwargs={
                         'entity': 'list',
-                        'card_id': st.session_state.selected_list_card,
                         'column': 'list_id',
-                        'value': 'st.session_state.v_card_list',
+                        'value': 'st.session_state.w_card_list',
+                        'card_id': st.session_state.selected_list_card
                     }
                 )
                 with prop_col:

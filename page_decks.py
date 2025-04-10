@@ -12,9 +12,9 @@ def get_content():
     df_decks.loc[mask_deck, 'open'] = True
 
     def check_match_deck__and_set(active_tab, card_key):
-        result = (st.session_state.get('v_deck_tab_bar') == active_tab) \
+        result = (st.session_state.get('w_deck_tab_bar') == active_tab) \
         and ((card_info := st.session_state.get(card_key)) is not None) \
-        and (selected_set := st.session_state.get('v_selected_deck_set')) \
+        and (selected_set := st.session_state.get('w_selected_deck_set')) \
         and (card_info.loc['set_code'] != selected_set.split(' ')[0]) \
         and (int(card_info.loc['create_ns']) <= int(selected_set.split(' ')[-1]))
         return result
@@ -22,20 +22,20 @@ def get_content():
     if ('selected_deck_card' not in st.session_state) or \
         (
             (st.session_state.get('selected_deck_card') is not None) and
-            (st.session_state.get('v_deck_tab_bar') not in ['Card info', 'Edit card'])
+            (st.session_state.get('w_deck_tab_bar') not in ['Card info', 'Edit card'])
         ):
             st.session_state.selected_deck_card = None
     elif check_match_deck__and_set('Edit card', 'selected_deck_card'):
-        _, _, language, card_uuid, _ = st.session_state.v_selected_deck_set.split(' ')
+        _, _, language, card_uuid, _ = st.session_state.w_selected_deck_set.split(' ')
         columns = ['language', 'card_uuid']
         values = [language, uuid.UUID(card_uuid).bytes]
         update_table_content(
-            'deck', st.session_state.selected_deck_card, columns, values
+            'deck', columns, values, st.session_state.selected_deck_card
         )
         st.session_state.selected_deck_card.rename('need_update', inplace=True)
-        del st.session_state.v_selected_deck_set
+        del st.session_state.w_selected_deck_set
     elif check_match_deck__and_set('Add cards', 'searched_deck_card'):
-        _, _, language, card_uuid, _ = st.session_state.v_selected_deck_set.split(' ')
+        _, _, language, card_uuid, _ = st.session_state.w_selected_deck_set.split(' ')
         st.session_state.searched_deck_card = search_set_by_name(
             'ignore_name', language, card_uuid
         ).iloc[0]
@@ -46,7 +46,7 @@ def get_content():
         def deck_callback():
             changes = [
                 (ix, [(col, val) for col, val in pair.items()])
-                for ix, pair in st.session_state.v_decks['edited_rows'].items()
+                for ix, pair in st.session_state.w_decks['edited_rows'].items()
             ]
             ix, [[col, val]]= changes[0]
 
@@ -54,16 +54,16 @@ def get_content():
                 st.session_state.current_deck_id = df_decks.iloc[ix].loc['deck_id']
             else:
                 deck_id = df_decks.iloc[ix].loc['deck_id']
-                st.session_state.v_deck_tab_bar = None
+                st.session_state.w_deck_tab_bar = None
                 st.session_state.selected_deck_card = None
                 try:
-                    update_table('deck', deck_id, col, val)
+                    update_table('deck', col, val, deck_id)
                 except sqlite3.IntegrityError:
                         table_container.error(f'Deck {val} already exist!')
 
         _ = table_container.data_editor(
             df_decks, 
-            key='v_decks',
+            key='w_decks',
             hide_index=True,
             column_config={
                 'name': st.column_config.TextColumn(
@@ -163,12 +163,12 @@ def get_content():
                     if value == True:
                         st.session_state.selected_deck_card = card_id \
                             [card_id_cols]
-                        st.session_state.v_deck_tab_bar = 'Card info'
+                        st.session_state.w_deck_tab_bar = 'Card info'
                     else:
                         st.session_state.selected_deck_card = None
-                        st.session_state.v_deck_tab_bar = 'Deck info'
-                    if 'v_selected_deck_set' in st.session_state:
-                        del st.session_state.v_selected_deck_set
+                        st.session_state.w_deck_tab_bar = 'Deck info'
+                    if 'w_selected_deck_set' in st.session_state:
+                        del st.session_state.w_selected_deck_set
                     return
                 elif column == 'deck_type_name':
                     amount, value = move_dict[value]
@@ -176,15 +176,13 @@ def get_content():
                         # Сперва добавим одну карту
                         card_id_add = card_id.copy()
                         card_id_add.loc['qnty'] = 1
-                        update_table_content(
-                            'deck', card_id_add, column, value
-                        )
+                        update_table_content('deck', column, value, card_id_add)
                         # Затем обновим значения для вычитания 1 карты
                         column = 'qnty'
                         card_id.loc['qnty'] -= 1
                         value = int(card_id.loc['qnty'])
 
-                update_table_content('deck', card_id, column, value)
+                update_table_content('deck', column, value, card_id)
                 if (card_id['open']) and (column == 'qnty') and (value == 0):
                     st.session_state.selected_deck_card = None
             else:
@@ -224,7 +222,7 @@ def get_content():
                     .loc[df_deck_content['deck_type_name'] == type]
                 _ = st.data_editor(
                     deck_type_content,
-                    key=f'v_deck_content_{type}',
+                    key=f'w_deck_content_{type}',
                     hide_index=True,
                     column_config={
                         'deck_id': None,
@@ -271,7 +269,7 @@ def get_content():
                     kwargs={
                         'df_deck_type_content': deck_type_content,
                         'card_id_cols': card_id_cols,
-                        'table': f'st.session_state.v_deck_content_{type}'
+                        'table': f'st.session_state.w_deck_content_{type}'
                     }
                 )
             else:
@@ -297,22 +295,21 @@ def get_content():
                 update_table(**kwargs)
             except sqlite3.IntegrityError:
                 deck_name_container.error(
-                    f'Deck {st.session_state.v_deck_name} already exist!'
+                    f'Deck {st.session_state.w_deck_name} already exist!'
                 )
-                st.session_state.v_deck_name = deck_name
+                st.session_state.w_deck_name = deck_name
         
         deck_name_container = st.container()
         _ = deck_name_container.text_input(
             'Deck name:',
             value=deck_name,
-            key='v_deck_name',
+            key='w_deck_name',
             on_change=update_table_wrapper,
             kwargs={
                 'entity': 'deck',
-                'default_value': None,
-                'id': st.session_state.current_deck_id,
                 'column': 'name',
-                'value': 'st.session_state.v_deck_name'
+                'value': 'st.session_state.w_deck_name',
+                'id': st.session_state.current_deck_id
             }
         )
 
@@ -325,7 +322,7 @@ def get_content():
             deck_tabs,
             tabs_size=[1, 1.2, 1, 1, 1],
             default=default_tab,
-            key='v_deck_tab_bar'
+            key='w_deck_tab_bar'
         )
 
         if deck_active_tab == 'Deck info':
@@ -345,15 +342,14 @@ def get_content():
                 options=df_players['player_id'],
                 format_func=lambda x: dict(df_players.values)[x],
                 index=idx,
-                key='v_deck_owner',
+                key='w_deck_owner',
                 placeholder='Choose owner',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'default_value': None,
-                    'id': st.session_state.current_deck_id,
                     'column': 'player_id',
-                    'value': 'st.session_state.v_deck_owner'
+                    'value': 'st.session_state.w_deck_owner',
+                    'id': st.session_state.current_deck_id
                 }
             )
 
@@ -361,14 +357,13 @@ def get_content():
                 'Creation date:',
                 value=creation_dtm.to_pydatetime(),
                 format="DD.MM.YYYY",
-                key='v_deck_creation_date',
+                key='w_deck_creation_date',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'default_value': None,
-                    'id': st.session_state.current_deck_id,
                     'column': 'creation_date',
-                    'value': 'st.session_state.v_deck_creation_date'
+                    'value': 'st.session_state.w_deck_creation_date',
+                    'id': st.session_state.current_deck_id
                 }
             )
 
@@ -377,29 +372,29 @@ def get_content():
             _ = col_wish_deck.checkbox(
                 'Mark as wish deck',
                 value=is_wish_deck,
-                key='v_is_wish_deck',
+                key='w_is_wish_deck',
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'id': st.session_state.current_deck_id,
                     'column': 'is_wish_deck',
-                    'value': 'int(st.session_state.v_is_wish_deck)'
+                    'value': 'int(st.session_state.w_is_wish_deck)',
+                    'id': st.session_state.current_deck_id
                 }
             )
 
             _ = st.text_area(
                 'Deck note',
                 value=note,
-                key='v_deck_note',
+                key='w_deck_note',
                 placeholder='Add your notes here',
                 max_chars=256,
                 height=68,
                 on_change=update_table_wrapper,
                 kwargs={
                     'entity': 'deck',
-                    'id': st.session_state.current_deck_id,
                     'column': 'note',
-                    'value': 'st.session_state.v_deck_note'
+                    'value': 'st.session_state.w_deck_note',
+                    'id': st.session_state.current_deck_id
                 }
             )
 
@@ -545,7 +540,7 @@ def get_content():
             search_bar, exact_seach_box = st.columns((0.7, 0.3))
 
             def reset_searchbar():
-                del st.session_state.v_searched_deck_card
+                del st.session_state.w_searched_deck_card
 
             exact_match = exact_seach_box.checkbox(
                 'Exact match',
@@ -558,7 +553,7 @@ def get_content():
                 searched_deck_card = st_searchbox(
                     search_function=searh_function,
                     placeholder="Enter card name",
-                    key="v_searched_deck_card",
+                    key="w_searched_deck_card",
                     clearable=True
                 )
             
@@ -621,8 +616,8 @@ def get_content():
                             st.session_state.current_deck_id
                         st.session_state.searched_deck_card['qnty'] = qnty
                         update_table_content(
-                            'deck', st.session_state.searched_deck_card,
-                            'qnty', qnty
+                            'deck', 'qnty', qnty,
+                            st.session_state.searched_deck_card
                         )
                         st.rerun()
 
@@ -648,13 +643,13 @@ def get_content():
                         df_decks['deck_id'] == st.session_state.current_deck_id
                         ].index[0]
                     ),
-                    key='v_card_deck',
+                    key='w_card_deck',
                     on_change=update_table_content_wrapper,
                     kwargs={
                         'entity': 'deck',
-                        'card_id': st.session_state.selected_deck_card,
                         'column': 'deck_id',
-                        'value': 'st.session_state.v_card_deck',
+                        'value': 'st.session_state.w_card_deck',
+                        'card_id': st.session_state.selected_deck_card
                     }
                 )
                 with prop_col:

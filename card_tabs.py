@@ -42,7 +42,7 @@ def render_card_prop_tab(entity, selected_card, callback_function):
 
     css = generate_css_set_icons(entity, sets_dict)
 
-    _ = click_detector(css, key=f'v_selected_{entity}_set')
+    _ = click_detector(css, key=f'w_selected_{entity}_set')
 
     st.markdown(
         f"Set:&nbsp;&nbsp;**{selected_card['set_name']}**"
@@ -56,15 +56,15 @@ def render_card_prop_tab(entity, selected_card, callback_function):
     )
     _ = st.selectbox(
         'Language:',
-        key='v_card_language',
+        key='w_card_language',
         options=list_of_languages,
         index=current_language,
         on_change=callback_function,
         kwargs={
             'entity': entity,
-            'card_id': selected_card,
             'column': 'language',
-            'value': 'st.session_state.v_card_language',
+            'value': 'st.session_state.w_card_language',
+            'card_id': selected_card
         }
     )
 
@@ -86,14 +86,14 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         trigger card number widget with build-in format function.
         """
         kwargs['value'] = dict(df_numbers.values)[
-            st.session_state.v_card_number
+            st.session_state.w_card_number
         ]
         callback_function(**kwargs)
     
     _ = st.radio(
         'Card number:',
         horizontal=True,
-        key='v_card_number',
+        key='w_card_number',
         options=df_numbers['card_number'],
         index=current_number,
         on_change=card_number_to_uuid,
@@ -106,13 +106,13 @@ def render_card_prop_tab(entity, selected_card, callback_function):
 
     _ = st.toggle(
         '**:rainbow-background[Foil]**',
-        key='v_foil_toggle',
+        key='w_foil_toggle',
         on_change=callback_function,
         kwargs={
             'entity': entity,
-            'card_id':selected_card,
             'column': 'foil',
-            'value': 'int(st.session_state.v_foil_toggle)',
+            'value': 'int(st.session_state.w_foil_toggle)',
+            'card_id': selected_card
         }
     )
 
@@ -124,13 +124,13 @@ def render_card_prop_tab(entity, selected_card, callback_function):
         'Condition:',
         options=list_of_conditions,
         index=current_condition_id,
-        key='v_card_condition',
+        key='w_card_condition',
         on_change=callback_function,
         kwargs={
             'entity': entity,
-            'card_id':selected_card,
             'column': 'condition_code',
-            'value': 'st.session_state.v_card_condition',
+            'value': 'st.session_state.w_card_condition',
+            'card_id': selected_card
         }
     )
 
