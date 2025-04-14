@@ -1,5 +1,6 @@
 import streamlit as st
 from utils import *
+import widgets
 
 def get_content():
     display_toasts()
@@ -96,8 +97,33 @@ def get_content():
                     st.rerun()
     
     table_side, overview_side = st.columns((0.6, 0.4))
+    with table_side:
+        _ = st.dataframe(
+                df_delver_lists.drop(columns=['create_ns']),
+                hide_index=True,
+                use_container_width=False,
+                )
+        df_import_content = get_import_content(
+            st.session_state.current_list_id
+        )
+        _ = st.dataframe(
+                    df_import_content,
+                    key=f'w_import_content',
+                    hide_index=True,
+                )
     with overview_side:
 
+        import_list_id, name, import_type, note, player_id, \
+           parent_list, creation_date =  df_delver_lists \
+            .loc[
+                mask_list,
+                [
+                    'import_list_id', 'name', 'type', 'note', 'player_id',
+                    'parent_list', 'creation_date'
+                ]
+            ] \
+            .values.ravel()
+        
         def update_table_wrapper(**kwargs):
             try:
                 update_table(**kwargs)
@@ -146,3 +172,67 @@ def get_content():
 
         import_tabs = [f'{import_type} info']
         default_tab = f'{import_type} info'
+        # if st.session_state.selected_import_card is not None:
+        #     import_tabs += ['Card info', 'Edit card']
+        #     default_tab = 'Card info'
+        deck_active_tab = show_tab_bar(
+            import_tabs,
+            tabs_size=[1.2, 1, 1, 0.8],
+            default=default_tab,
+            key='w_delver_import_tab_bar'
+        )
+
+        if deck_active_tab == f'{import_type} info':
+            col_owner, col_creation_date, col_wish_deck = \
+                st.columns([0.4, 0.3, 0.3])
+            widgets.owner_selectbox(
+                'import_list', update_table_wrapper, player_id, import_list_id,
+                'temp/temp_db.db', col_owner
+            )
+
+
+        #     _ = col_creation_date.date_input(
+        #         'Creation date:',
+        #         value=creation_dtm.to_pydatetime(),
+        #         format="DD.MM.YYYY",
+        #         key='v_deck_creation_date',
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'default_value': None,
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'creation_date',
+        #             'value': 'st.session_state.v_deck_creation_date'
+        #         }
+        #     )
+
+        #     col_wish_deck.write('')
+        #     col_wish_deck.write('')
+        #     _ = col_wish_deck.checkbox(
+        #         'Mark as wish deck',
+        #         value=is_wish_deck,
+        #         key='v_is_wish_deck',
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'is_wish_deck',
+        #             'value': 'int(st.session_state.v_is_wish_deck)'
+        #         }
+        #     )
+
+        #     _ = st.text_area(
+        #         'Deck note',
+        #         value=note,
+        #         key='v_deck_note',
+        #         placeholder='Add your notes here',
+        #         max_chars=256,
+        #         height=68,
+        #         on_change=update_table_wrapper,
+        #         kwargs={
+        #             'entity': 'deck',
+        #             'id': st.session_state.current_deck_id,
+        #             'column': 'note',
+        #             'value': 'st.session_state.v_deck_note'
+        #         }
+        #     )

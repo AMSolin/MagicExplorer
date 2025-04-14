@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit_searchbox import st_searchbox
+import widgets
 from utils import *
 from card_tabs import *
 
@@ -279,14 +280,10 @@ def get_content():
         render_deck_content_by_type('Maybe', 'Maybeboard')
     with overview_side:
 
-        deck_name, creation_dtm, note, player_id, owner, \
-        is_wish_deck = df_decks \
+        deck_name, creation_dtm, note, player_id, is_wish_deck = df_decks \
             .loc[
                 mask_deck,
-                [
-                    'name', 'creation_date', 'note', 'player_id', 'owner',
-                    'is_wish_deck'
-                ]
+                ['name', 'creation_date', 'note', 'player_id', 'is_wish_deck']
             ] \
             .values.ravel()
         
@@ -328,30 +325,34 @@ def get_content():
         if deck_active_tab == 'Deck info':
             col_owner, col_creation_date, col_wish_deck = \
                 st.columns([0.4, 0.3, 0.3])
-            df_players = get_players()[['player_id', 'name']]
-            if owner is not None:
-                idx = int(
-                    df_players[
-                        df_players['player_id'] == player_id
-                    ].index[0]
-                )
-            else:
-                idx = None
-            _ = col_owner.selectbox(
-                'Owner:',
-                options=df_players['player_id'],
-                format_func=lambda x: dict(df_players.values)[x],
-                index=idx,
-                key='w_deck_owner',
-                placeholder='Choose owner',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'column': 'player_id',
-                    'value': 'st.session_state.w_deck_owner',
-                    'id': st.session_state.current_deck_id
-                }
+            widgets.owner_selectbox(
+                'deck', update_table_wrapper, player_id,
+                st.session_state.current_deck_id, col_owner
             )
+            # df_players = get_players()[['player_id', 'name']]
+            # if owner is not None:
+            #     idx = int(
+            #         df_players[
+            #             df_players['player_id'] == player_id
+            #         ].index[0]
+            #     )
+            # else:
+            #     idx = None
+            # _ = col_owner.selectbox(
+            #     'Owner:',
+            #     options=df_players['player_id'],
+            #     format_func=lambda x: dict(df_players.values)[x],
+            #     index=idx,
+            #     key='w_deck_owner',
+            #     placeholder='Choose owner',
+            #     on_change=update_table_wrapper,
+            #     kwargs={
+            #         'entity': 'deck',
+            #         'column': 'player_id',
+            #         'value': 'st.session_state.w_deck_owner',
+            #         'id': st.session_state.current_deck_id
+            #     }
+            # )
 
             _ = col_creation_date.date_input(
                 'Creation date:',

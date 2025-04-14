@@ -481,17 +481,14 @@ def get_decks():
     result = csr.read_sql(
     """
         select
-            d.deck_id,
-            d.name,
-            datetime(d.creation_date, 'unixepoch', 'localtime') as creation_date,
-            d.note,
-            d.player_id,
-            d.is_wish_deck,
-            p.name as owner
-        from decks as d
-        left join players as p
-            on d.player_id = p.player_id
-        order by d.creation_date
+            deck_id,
+            name,
+            datetime(creation_date, 'unixepoch', 'localtime') as creation_date,
+            note,
+            player_id,
+            is_wish_deck,
+        from decks
+        order by creation_date
     """,
     parse_dates='creation_date')
     result['create_ns'] = time.time_ns()
@@ -566,28 +563,29 @@ def delete_record(entity: str, name: str):
         )
 
 def update_table(
-        entity, id, column, value=None, default_value=None, 
-        db_path='user_data.db'
+        entity, column, value=None, id=None, default_value=None,
+        db_path=None
     ):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     if isinstance(value, datetime.date):
-        value = int(datetime.datetime(
-                value.year, value.month, value.day
-            ).timestamp()
+        value = int(
+            datetime.datetime(value.year, value.month, value.day) \
+                .timestamp()
         )
-    csr = Db(db_path)
+    csr = Db(db_path if db_path else 'user_data.db')
     if column == f'is_default_{entity}':
         set_default_value(entity, default_value, csr)
     else:
+        condition = f'where {entity}_id = {id}' if id else ''
         csr.execute(
         f"""
             update {entity}s
             set {column} = '{value}'
-            where {entity}_id = {id}
+            {condition}
         """)
 
-def update_table_content(entity, card_id, column, value):
+def update_table_content(entity, column, value, card_id):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     csr = Db('user_data.db')
@@ -801,6 +799,7 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
     df_import = csr.read_sql(
     """
         select
+            cards.list as import_list_id,
             case
                 when apk.scryfall_id is NULL and cards.card = 62663
                     then '320fdf89-e158-41c5-b0bf-fee9dec36a75'
@@ -826,21 +825,8 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
                 when cards.tab = 2
                     then 'Maybe'
             end as deck_type_name,
-            cards.quantity as qnty,
-            lists._id as import_list_id,
-            lists.name as name,
-            case
-                when lists.category = 1
-                    then 'Collection'
-                when lists.category = 2
-                    then 'Deck'
-                when lists.category = 3
-                    then 'Wish list'
-            end as type,
-            cast(substr(lists.creation, 1, 10) as integer) as creation_date
+            cards.quantity as qnty
         from exp_db.cards as cards
-        left join exp_db.lists as lists
-            on cards.list = lists._id
         left join apk_db.cards as apk
             on cards.card = apk._id
     """) \
@@ -848,17 +834,14 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
     csr.execute(
     f"""
         create table import_cards_temp (
+            import_list_id integer,
             scryfall_id guid,
             language text,
             condition_name text,
             foil integer,
             is_commander integer,
             deck_type_name text,
-            qnty integer,
-            import_list_id integer,
-            name text,
-            type integer,
-            creation_date integer
+            qnty integer
         )
     """)
     columns_temp = csr.read_sql('select * from import_cards_temp').columns
@@ -873,20 +856,37 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
     f"""
         drop table if exists temp_db.import_cards;
         create table temp_db.import_cards (
+            import_list_id integer,
             card_uuid guid,
             language text,
             condition_code text,
             foil integer,
             is_commander integer,
             deck_type_name text,
-            qnty integer,
-            import_list_id integer
+            qnty integer
         );
+        drop table if exists temp_db.import_lists;
+        create table temp_db.import_lists (
+            import_list_id integer,
+            name text,
+            type text,
+            is_wished integer,
+            creation_date integer,
+            note text default null,
+            player_id integer default null,
+            parent_list text default null,
+            selected integer default 0
+        );
+        create unique index temp_db.idx_list_content
+        on import_lists (name, type);
     """)
-    columns = csr.read_sql('select * from import_cards').columns
+    import_cards_columns = csr.read_sql('select * from import_cards').columns
+    import_lists_columns = [
+        'import_list_id', 'name', 'type', 'is_wished', 'creation_date'
+    ]
     csr.executescript(
     f"""
-        insert into temp_db.import_cards ({', '.join(columns)})
+        insert into temp_db.import_cards ({', '.join(import_cards_columns)})
         select 
             ca.card_uuid,
             t.language,
@@ -917,31 +917,38 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
             token_name text,
             qnty integer
         );
+        insert into temp_db.import_lists ({', '.join(import_lists_columns)})
+        select
+            _id as import_list_id,
+            name as name,
+            case
+                when category in (1, 3)
+                    then 'Collection'
+                when category = 2
+                    then 'Deck'
+            end as type,
+            case
+                when category = 3
+                    then 1
+                else 0
+            end as is_wished,
+            cast(substr(creation, 1, 10) as integer) as creation_date
+        from exp_db.lists
+        ;
         insert into temp_db.import_tokens (type, list_name, token_name, qnty)
         select
-            t.type,
-            t.name,
+            l.type,
+            l.name,
             tk.name,
             sum(t.qnty) as qnty
         from import_cards_temp as t
         inner join app_db.tokens as tk
             on t.scryfall_id = tk.scryfall_id
+        left join temp_db.import_lists as l
+            on t.import_list_id = l.import_list_id
         group by
-            t.type, t.name, tk.name
+            l.type, l.name, tk.name
         ;
-        drop table if exists temp_db.import_lists;
-        create table temp_db.import_lists (
-            import_list_id integer,
-            name text,
-            type text,
-            selected integer default 1,
-            creation_date integer
-        );
-        create unique index temp_db.idx_list_content
-        on import_lists (name, type);
-        insert into temp_db.import_lists ({', '.join(columns_temp[-4:])})
-        select distinct {', '.join(columns_temp[-4:])}
-        from import_cards_temp;
     """)
 
 def check_for_tokens():
@@ -965,6 +972,7 @@ def check_for_tokens():
 
 def get_import_names():
     csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/user_data.db' as ud")
     result = csr.read_sql(
     """
     select
@@ -972,11 +980,16 @@ def get_import_names():
         import_list_id,
         name,
         type,
+        note,
+        is_wished,
+        player_id,
+        parent_list,
         creation_date
     from import_lists
     order by import_list_id
     """
     )
+    result['player_id'] = result['player_id'].astype(pd.Int32Dtype())
     result['create_ns'] = time.time_ns()
     return result
 
@@ -1035,6 +1048,26 @@ def check_for_duplicates():
     msg += 'Import aborted!' if len(msg) > 0 else ''
     return msg
 
+def get_import_content(import_list_id):
+    csr = Db('temp/temp_db.db')
+    csr.execute("attach database './data/app_data.db' as ad")
+    result = csr.read_sql(
+    f"""
+        select
+            coalesce(fd.name, ca.name) as name,
+            ic.qnty
+        from import_cards as ic
+        left join cards as ca
+            on ic.card_uuid = ca.card_uuid
+        left join foreign_data as fd
+            on ic.card_uuid = fd.card_uuid and ic.language = fd.language
+        where
+            ic.import_list_id = {import_list_id}
+            and coalesce(ca.side, 'a') = 'a'
+    """)
+    result['create_ns'] = str(time.time_ns())
+    return result
+
 def import_delver_lens_cards(list_for_duplicate: str=None):
     csr = Db('temp/temp_db.db')
     csr.execute("attach database './data/user_data.db' as ud")
@@ -1074,7 +1107,7 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
         select name, creation_date, import_list_id, type
         from import_lists
         where
-            type in ('Collection', 'Wish list')
+            type = 'Collection'
             and selected = 1
     """
     ).fetchall()
@@ -1099,7 +1132,7 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
         select name, creation_date, import_list_id, type
         from import_lists
         where
-            type in ('Deck', 'Wish deck')
+            type = 'Deck'
             and selected = 1
     """
     ).fetchall()
