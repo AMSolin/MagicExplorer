@@ -1,5 +1,6 @@
 import streamlit as st
 from utils import *
+from card_tabs import *
 
 def get_content():
     display_toasts()
@@ -16,7 +17,7 @@ def get_content():
                 type='db'
                 )
             button_disable = False if dlens_db and ut_db else True
-            submitted = st.button('Import', disabled=button_disable)
+            submitted = st.button('Load', disabled=button_disable)
             if submitted and dlens_db and ut_db:
                 dlens_db_path, ut_db_path = save_to_temp_dir(dlens_db, ut_db)
                 temp_import_delver_lens_cards(dlens_db_path, ut_db_path)
@@ -28,9 +29,9 @@ def get_content():
         else:
             df_delver_lists = get_import_names() \
                 .assign(open=False)
-            if 'current_list_id' not in st.session_state:
-                st.session_state.current_list_id = df_delver_lists.iloc[0].loc['import_list_id']
-            mask_list = df_delver_lists['import_list_id'] == st.session_state.current_list_id
+            if 'current_import_list_id' not in st.session_state:
+                st.session_state.current_import_list_id = df_delver_lists.iloc[0].loc['import_list_id']
+            mask_list = df_delver_lists['import_list_id'] == st.session_state.current_import_list_id
             df_delver_lists.loc[mask_list, 'open'] = True
 
             def list_callback():
@@ -40,7 +41,7 @@ def get_content():
                 ]
                 ix, [[col, val]]= changes[0]
                 if col == 'open':
-                    st.session_state.current_list_id = df_delver_lists \
+                    st.session_state.current_import_list_id = df_delver_lists \
                         .iloc[ix].loc['import_list_id']
                 else:
                     list_id = df_delver_lists.iloc[ix].loc['import_list_id']
@@ -84,7 +85,7 @@ def get_content():
             col_import_btn, col_discard_brn = st.columns(2)
             discard_button = col_discard_brn.button('Discard import', type='primary')
             if discard_button:
-                del st.session_state.s_selected_lists, st.session_state.current_list_id
+                del st.session_state.s_selected_lists, st.session_state.current_import_list_id
                 st.rerun()
             import_button = col_import_btn.button('Import')
             if import_button:
@@ -97,52 +98,50 @@ def get_content():
     
     table_side, overview_side = st.columns((0.6, 0.4))
     with overview_side:
-
+        
         def update_table_wrapper(**kwargs):
             try:
                 update_table(**kwargs)
             except sqlite3.IntegrityError:
                 header_container.error(
-                    f'{st.session_state.w_import_type} {st.session_state.w_import_name} already exist!'
+                    f'{st.session_state.w_import_list_type} {st.session_state.w_import_list_name} already exist!'
                 )
-                st.session_state.w_import_type = import_type
-                st.session_state.w_import_name = name
+                st.session_state.w_import_list_type = selected_import_list['import_type']
+                st.session_state.w_import_list_name = selected_import_list['name']
+
+        default_args = {
+            'entity':'import_list', 'callback_function':update_table_wrapper,
+            'index_id':st.session_state.current_import_list_id, 'db_path':'temp/temp_db.db'
+        }
+
+        selected_import_list =  df_delver_lists \
+            .loc[
+                mask_list,
+                [
+                    'name', 'type', 'note', 'player_id', 'parent_list', 
+                    'creation_date', 'is_wish'
+                ]
+            ] \
+            .iloc[0].to_dict()
         
         header_container = st.container()
-        col_name, col_type = header_container.columns([0.7, 0.3])
-        
-        if 'w_import_name' not in st.session_state:
-            st.session_state.w_import_name = name
-        _ = col_name.text_input(
-            'Name:',
-            key='w_import_name',
-            on_change=update_table_wrapper,
-            kwargs={
-                'entity': 'import_list',
-                'column': 'name',
-                'value': 'st.session_state.w_import_name',
-                'id': import_list_id,
-                'db_path': 'temp/temp_db.db'
-            }
+        render_entity_header(
+            header_container, **default_args, **selected_import_list
         )
 
-        if 'w_import_type' not in st.session_state:
-            st.session_state.w_import_type = import_type
-        type_options = ['Deck', 'Collection']
-        _ = col_type.selectbox(
-            'Type:',
-            options=type_options,
-            key='w_import_type',
-            placeholder='Choose type',
-            on_change=update_table_wrapper,
-            kwargs={
-                'entity': 'import_list',
-                'column': 'type',
-                'value': 'st.session_state.w_import_type',
-                'id': import_list_id,
-                'db_path': 'temp/temp_db.db'
-            }
+        import_tabs = ['Options']
+        default_tab = 'Options'
+        # if st.session_state.selected_import_card is not None:
+        #     import_tabs += ['Card info', 'Edit card']
+        #     default_tab = 'Card info'
+        deck_active_tab = show_tab_bar(
+            import_tabs,
+            tabs_size=[1.2, 1, 1, 0.8],
+            default=default_tab,
+            key='w_delver_import_tab_bar'
         )
 
-        import_tabs = [f'{import_type} info']
-        default_tab = f'{import_type} info'
+
+        if deck_active_tab == 'Options':
+            render_entity_prop_tab(**default_args,**selected_import_list)
+           

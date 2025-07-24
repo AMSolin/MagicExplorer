@@ -6,7 +6,7 @@ from utils import Db
 def check_table(
     table_name, db_file, reset_table_func
 ):
-    tbl_names_col, rows_cnt_col, btn_col, _, = st.columns((0.2, 0.1, 0.1, 0.6))
+    tbl_names_col, rows_cnt_col, btn_col, _, = st.columns((0.2, 0.15, 0.15, 0.5))
     tbl_names_col.text(db_file[:-2] + table_name)
     rows_cnt_col.text(f"rows: {get_rows_count(db_file, table_name)}")
     reset_table_btn = btn_col.button('Reset table', key=f'reset_{table_name}_btn')
@@ -84,9 +84,9 @@ def reset_table_lists():
             name text not null unique,
             player_id integer,
             creation_date integer not null,
-            note text,
+            note text default '',
             is_default_list integer default 0,
-            is_wish_list integer default 0,
+            is_wish integer default 0,
             foreign key (player_id) references players(player_id) on delete set null on update cascade
         );
         insert into lists (name, creation_date, is_default_list)
@@ -128,8 +128,8 @@ def reset_table_decks():
             name text not null unique,
             player_id integer,
             creation_date integer not null,
-            note text,
-            is_wish_deck integer default 0,
+            note text default '',
+            is_wish integer default 0,
             foreign key (player_id) references players(player_id)
                 on update cascade on delete set null
         );

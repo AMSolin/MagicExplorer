@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_searchbox import st_searchbox
 from utils import *
+import widgets
 from card_tabs import *
 import uuid
 
@@ -212,17 +213,6 @@ def get_content():
             }
         )
     with overview_side:
-
-        list_name, creation_dtm, note, player_id, \
-        owner, is_default_list, is_wish_list =  df_lists \
-            .loc[
-                mask_list,
-                [
-                    'name', 'creation_date', 'note', 'player_id',
-                    'owner', 'is_default_list', 'is_wish_list'
-                ]
-            ] \
-            .values.ravel()
         
         def update_table_wrapper(**kwargs):
             try:
@@ -231,27 +221,27 @@ def get_content():
                 list_name_container.error(
                     f'Collection {st.session_state.w_list_name} already exist!'
                 )
-                st.session_state.w_list_name = list_name
+                st.session_state.w_list_name = selected_list['name']
+        
+        default_args = {
+            'entity':'list', 'callback_function':update_table_wrapper,
+            'index_id':st.session_state.current_list_id,
+        }
+
+        selected_list = df_lists \
+            .loc[
+                mask_list,
+                [
+                    'name', 'creation_date', 'note', 'player_id',
+                    'owner', 'is_default_list', 'is_wish'
+                ]
+            ] \
+            .iloc[0].to_dict()
         
         list_name_container = st.container()
-        col_list_name, col_counter = list_name_container.columns((0.8, 0.2))
-        _ = col_list_name.text_input(
-            'Collection name:',
-            value=list_name,
-            key='w_list_name',
-            on_change=update_table_wrapper,
-            kwargs={
-                'entity': 'list',
-                'column': 'name',
-                'value': 'st.session_state.w_list_name',
-                'id': st.session_state.current_list_id
-            }
-        )
-
-        _ = col_counter.text_input(
-            'Cards total:',
-            value=df_list_content['qnty'].sum(),
-            disabled=True
+        render_entity_header(
+            list_name_container, counter=df_list_content['qnty'].sum(),
+            **default_args, **selected_list
         )
 
         collection_tabs = ['Collection info', 'Add cards']
@@ -267,86 +257,7 @@ def get_content():
         )
 
         if collection_active_tab == 'Collection info':
-            col_owner, col_creation_date = st.columns([0.6, 0.4])
-            df_players = get_players()[['player_id', 'name']]
-            if owner is not None:
-                idx = int(
-                    df_players[
-                        df_players['player_id'] == player_id
-                    ].index[0]
-                )
-            else:
-                idx = None
-            _ = col_owner.selectbox(
-                'Owner:',
-                options=df_players['player_id'],
-                format_func=lambda x: dict(df_players.values)[x],
-                index=idx,
-                key='w_list_owner',
-                placeholder='Choose owner',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'list',
-                    'column': 'player_id',
-                    'value': 'st.session_state.w_list_owner',
-                    'id': st.session_state.current_list_id
-                }
-            )
-            _ = col_creation_date.date_input(
-                'Creation date:',
-                value=creation_dtm.to_pydatetime(),
-                format="DD.MM.YYYY",
-                key='w_creation_date',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'list',
-                    'column': 'creation_date',
-                    'value': 'st.session_state.w_creation_date',
-                    'id': st.session_state.current_list_id
-                }
-            )
-            _ = col_owner.checkbox(
-                'Mark as primary collection',
-                disabled=bool(is_default_list),
-                value=is_default_list,
-                key='w_is_default_list',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'list',
-                    'column': 'is_default_list',
-                    'default_value': list_name,
-                    'id': st.session_state.current_list_id
-                }
-            )
-
-            _ = col_creation_date.checkbox(
-                'Mark as wish list',
-                value=is_wish_list,
-                key='w_is_wish_list',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'list',
-                    'column': 'is_wish_list',
-                    'value': 'int(st.session_state.w_is_wish_list)',
-                    'id': st.session_state.current_list_id
-                }
-            )
-
-            _ = st.text_area(
-                'Collection note',
-                value=note,
-                key='w_list_note',
-                placeholder='Add your notes here',
-                max_chars=256,
-                height=68,
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'list',
-                    'column': 'note',
-                    'value': 'st.session_state.w_list_note',
-                    'id': st.session_state.current_list_id
-                }
-            )
+            render_entity_prop_tab(**default_args,**selected_list)
 
         if collection_active_tab == 'Add cards':
             search_bar, exact_seach_box = st.columns((0.7, 0.3))

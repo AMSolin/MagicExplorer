@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit_searchbox import st_searchbox
+import widgets
 from utils import *
 from card_tabs import *
 
@@ -279,17 +280,6 @@ def get_content():
         render_deck_content_by_type('Maybe', 'Maybeboard')
     with overview_side:
 
-        deck_name, creation_dtm, note, player_id, owner, \
-        is_wish_deck = df_decks \
-            .loc[
-                mask_deck,
-                [
-                    'name', 'creation_date', 'note', 'player_id', 'owner',
-                    'is_wish_deck'
-                ]
-            ] \
-            .values.ravel()
-        
         def update_table_wrapper(**kwargs):
             try:
                 update_table(**kwargs)
@@ -297,20 +287,23 @@ def get_content():
                 deck_name_container.error(
                     f'Deck {st.session_state.w_deck_name} already exist!'
                 )
-                st.session_state.w_deck_name = deck_name
+                st.session_state.w_deck_name = selected_deck['name']
+        
+        default_args = {
+            'entity':'deck', 'callback_function':update_table_wrapper,
+            'index_id':st.session_state.current_deck_id,
+        }
+        selected_deck = df_decks \
+            .loc[
+                mask_deck,
+                ['name', 'creation_date', 'note', 'player_id', 'is_wish']
+            ] \
+            .iloc[0].to_dict()
+        
         
         deck_name_container = st.container()
-        _ = deck_name_container.text_input(
-            'Deck name:',
-            value=deck_name,
-            key='w_deck_name',
-            on_change=update_table_wrapper,
-            kwargs={
-                'entity': 'deck',
-                'column': 'name',
-                'value': 'st.session_state.w_deck_name',
-                'id': st.session_state.current_deck_id
-            }
+        render_entity_header(
+            deck_name_container, **default_args, **selected_deck
         )
 
         deck_tabs = ['Deck info', 'Deck builder', 'Add cards']
@@ -326,77 +319,7 @@ def get_content():
         )
 
         if deck_active_tab == 'Deck info':
-            col_owner, col_creation_date, col_wish_deck = \
-                st.columns([0.4, 0.3, 0.3])
-            df_players = get_players()[['player_id', 'name']]
-            if owner is not None:
-                idx = int(
-                    df_players[
-                        df_players['player_id'] == player_id
-                    ].index[0]
-                )
-            else:
-                idx = None
-            _ = col_owner.selectbox(
-                'Owner:',
-                options=df_players['player_id'],
-                format_func=lambda x: dict(df_players.values)[x],
-                index=idx,
-                key='w_deck_owner',
-                placeholder='Choose owner',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'column': 'player_id',
-                    'value': 'st.session_state.w_deck_owner',
-                    'id': st.session_state.current_deck_id
-                }
-            )
-
-            _ = col_creation_date.date_input(
-                'Creation date:',
-                value=creation_dtm.to_pydatetime(),
-                format="DD.MM.YYYY",
-                key='w_deck_creation_date',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'column': 'creation_date',
-                    'value': 'st.session_state.w_deck_creation_date',
-                    'id': st.session_state.current_deck_id
-                }
-            )
-
-            col_wish_deck.write('')
-            col_wish_deck.write('')
-            _ = col_wish_deck.checkbox(
-                'Mark as wish deck',
-                value=is_wish_deck,
-                key='w_is_wish_deck',
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'column': 'is_wish_deck',
-                    'value': 'int(st.session_state.w_is_wish_deck)',
-                    'id': st.session_state.current_deck_id
-                }
-            )
-
-            _ = st.text_area(
-                'Deck note',
-                value=note,
-                key='w_deck_note',
-                placeholder='Add your notes here',
-                max_chars=256,
-                height=68,
-                on_change=update_table_wrapper,
-                kwargs={
-                    'entity': 'deck',
-                    'column': 'note',
-                    'value': 'st.session_state.w_deck_note',
-                    'id': st.session_state.current_deck_id
-                }
-            )
+            render_entity_prop_tab(**default_args,**selected_deck)
 
         if deck_active_tab == 'Deck builder':
             color_map = {

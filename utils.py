@@ -387,7 +387,7 @@ def get_lists():
             l.note,
             l.is_default_list,
             l.player_id,
-            l.is_wish_list,
+            l.is_wish,
             p.name as owner
         from lists as l
         left join players as p
@@ -481,17 +481,14 @@ def get_decks():
     result = csr.read_sql(
     """
         select
-            d.deck_id,
-            d.name,
-            datetime(d.creation_date, 'unixepoch', 'localtime') as creation_date,
-            d.note,
-            d.player_id,
-            d.is_wish_deck,
-            p.name as owner
-        from decks as d
-        left join players as p
-            on d.player_id = p.player_id
-        order by d.creation_date
+            deck_id,
+            name,
+            datetime(creation_date, 'unixepoch', 'localtime') as creation_date,
+            note,
+            player_id,
+            is_wish
+        from decks
+        order by creation_date
     """,
     parse_dates='creation_date')
     result['create_ns'] = time.time_ns()
@@ -566,28 +563,29 @@ def delete_record(entity: str, name: str):
         )
 
 def update_table(
-        entity, id, column, value=None, default_value=None, 
-        db_path='user_data.db'
+        entity, column, value=None, id=None, default_value=None,
+        db_path=None
     ):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     if isinstance(value, datetime.date):
-        value = int(datetime.datetime(
-                value.year, value.month, value.day
-            ).timestamp()
+        value = int(
+            datetime.datetime(value.year, value.month, value.day) \
+                .timestamp()
         )
-    csr = Db(db_path)
+    csr = Db(db_path if db_path else 'user_data.db')
     if column == f'is_default_{entity}':
         set_default_value(entity, default_value, csr)
     else:
+        condition = f'where {entity}_id = {id}' if id else ''
         csr.execute(
         f"""
             update {entity}s
             set {column} = '{value}'
-            where {entity}_id = {id}
+            {condition}
         """)
 
-def update_table_content(entity, card_id, column, value):
+def update_table_content(entity, column, value, card_id):
     if isinstance(value, str) and 'session_state' in value:
         value = eval(value)
     csr = Db('user_data.db')

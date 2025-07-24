@@ -2,6 +2,7 @@ import streamlit as st
 from st_click_detector import click_detector
 
 from utils import *
+import widgets
 
 def update_searched_card(entity, card_id, column, value):
     """
@@ -19,6 +20,53 @@ def update_searched_card(entity, card_id, column, value):
                 card_id['language'],
                 card_id['card_uuid'].hex()
             ).iloc[0]
+        
+def render_entity_header(
+        container, name, type=None, counter=None, **default_args
+    ):
+    if default_args['entity'] == 'deck':
+        col_left = container
+    else:
+        col_left, col_right = container.columns((0.7, 0.3))
+
+    widgets.name_textbox(
+        name=name, st_column=col_left, **default_args
+    )
+
+    if default_args['entity'] == 'list':
+        _ = col_right.text_input(
+            'Cards total:', value=counter, disabled=True
+        )
+    elif default_args['entity'] == 'import_list':
+        widgets.entity_type_selectbox(
+            type=type, st_column=col_right, **default_args
+        )
+
+def render_entity_prop_tab(
+        player_id, creation_date, is_wish, note, is_default_list=None,
+        **default_args
+    ):
+
+        col_left, col_right = st.columns([0.6, 0.4])
+
+        widgets.owner_selectbox(
+            player_id=player_id, st_column=col_left,**default_args
+        )
+
+        widgets.creation_datebox(
+            creation_date=creation_date, st_column=col_right,**default_args
+        )
+        if default_args['entity'] == 'list':
+            widgets.primary_checkbox(
+                is_default_list=is_default_list, st_column=col_left,**default_args
+            )
+        widgets.wish_checkbox(
+            is_wish=is_wish, st_column=col_right, **default_args
+        )
+
+        widgets.note_textbox(
+            note=note,**default_args
+        )
 
 def render_card_prop_tab(entity, selected_card, callback_function):
     if isinstance(selected_card, list):
