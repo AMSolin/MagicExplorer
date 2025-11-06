@@ -22,7 +22,7 @@ def update_searched_card(entity, card_id, column, value):
             ).iloc[0]
         
 def render_entity_header(
-        container, name, type=None, counter=None, **default_args
+        container, name, entity_type=None, counter=None, **default_args
     ):
     if default_args['entity'] == 'deck':
         col_left = container
@@ -39,7 +39,7 @@ def render_entity_header(
         )
     elif default_args['entity'] == 'import_list':
         widgets.entity_type_selectbox(
-            type=type, st_column=col_right, **default_args
+            entity_type=entity_type, st_column=col_right, **default_args
         )
 
 def render_entity_prop_tab(

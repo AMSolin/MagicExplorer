@@ -106,7 +106,7 @@ def get_content():
                 header_container.error(
                     f'{st.session_state.w_import_list_type} {st.session_state.w_import_list_name} already exist!'
                 )
-                st.session_state.w_import_list_type = selected_import_list['import_type']
+                st.session_state.w_import_list_type = selected_import_list['entity_type']
                 st.session_state.w_import_list_name = selected_import_list['name']
 
         default_args = {
@@ -118,7 +118,7 @@ def get_content():
             .loc[
                 mask_list,
                 [
-                    'name', 'type', 'note', 'player_id', 'parent_list', 
+                    'name', 'entity_type', 'note', 'player_id', 'parent_list', 
                     'creation_date', 'is_wish'
                 ]
             ] \

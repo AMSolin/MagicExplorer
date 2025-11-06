@@ -910,7 +910,7 @@ def temp_import_delver_lens_cards(dlens_db_path, ut_db_path):
         ;
         drop table if exists temp_db.import_tokens;
         create table temp_db.import_tokens (
-            type text,
+            entity_type text,
             list_name text,
             token_name text,
             qnty integer
@@ -947,7 +947,7 @@ def check_for_tokens():
     result = csr.execute(
     """
     select
-        type,
+        entity_type,
         list_name,
         token_name,
         qnty
@@ -985,11 +985,11 @@ def check_for_duplicates():
     """
     select
         count(*) as cnt_dups,
-        type,
+        entity_type,
         name
     from import_lists
     group by
-        type,
+        entity_type,
         name
     having cnt_dups > 1
     """
@@ -1006,7 +1006,7 @@ def check_for_duplicates():
     select name
     from import_lists
     where
-        type = 'Collection'
+        entity_type = 'Collection'
         and selected = 1
     intersect
     select name
@@ -1021,7 +1021,7 @@ def check_for_duplicates():
     select name
     from import_lists
     where
-        type = 'Deck'
+        entity_type = 'Deck'
         and selected = 1
     intersect
     select name
@@ -1069,18 +1069,18 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
     """)
     result = csr.execute(
     """
-        select name, creation_date, import_list_id, type
+        select name, creation_date, import_list_id, entity_type
         from import_lists
         where
-            type in ('Collection', 'Wish list')
+            entity_type = 'Collection'
             and selected = 1
     """
     ).fetchall()
-    for name, creation_date, import_list_id, type in result:
+    for name, creation_date, import_list_id, entity_type in result:
         add_new_record('list', name, creation_date=creation_date)
         list_id = get_list_id_by_name(name)
-        if type == 'Wish list':
-            update_table('list', list_id, 'is_wish_list', 1)
+        if entity_type == 'Wish list':
+            update_table('list', list_id, 'is_wish', 1)
         insert_exported_list_content(list_id, import_list_id)
         count = csr.execute(
             f"""
@@ -1094,21 +1094,21 @@ def import_delver_lens_cards(list_for_duplicate: str=None):
     
     result = csr.execute(
     """
-        select name, creation_date, import_list_id, type
+        select name, creation_date, import_list_id, entity_type
         from import_lists
         where
-            type in ('Deck', 'Wish deck')
+            entity_type = 'Deck'
             and selected = 1
     """
     ).fetchall()
-    for name, creation_date, import_list_id, type in result:
+    for name, creation_date, import_list_id, entity_type in result:
         add_new_record('deck', name, creation_date=creation_date)
         deck_id = csr.execute(
                 f"select deck_id from ud.decks where name = '{name}'"
             ) \
             .fetchone()[0]
-        if type == 'Wish deck':
-            update_table('deck', deck_id, 'is_wish_deck', 1)
+        if entity_type == 'Wish deck':
+            update_table('deck', deck_id, 'is_wish', 1)
         csr.execute(
         f"""
             insert into deck_content (

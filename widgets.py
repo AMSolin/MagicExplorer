@@ -44,10 +44,10 @@ def owner_selectbox(
     )
 
 def entity_type_selectbox(
-    entity, callback_function, type, index_id, st_column=st, db_path=None,
+    entity, callback_function, entity_type, index_id, st_column=st, db_path=None,
     **kwargs
 ):
-    st.session_state.w_import_list_type = type
+    st.session_state['w_import_list_type'] = entity_type
     _ = st_column.selectbox(
         'Type:',
         options=['Deck', 'Collection'],
